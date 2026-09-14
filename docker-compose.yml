@@ -1,0 +1,82 @@
+services:
+  mysql:
+    image: mysql:9.7.2
+    container_name: fkusoft-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-course_root_dev_only}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-bigdata}
+      MYSQL_USER: ${MYSQL_USER:-course}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-course_dev_only}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [bigdata]
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fkusoft-bigdata-course:python_3.12-hadoop_3.5
+    container_name: fkusoft-bigdata-course
+    hostname: backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-bigdata}
+      MYSQL_USER: ${MYSQL_USER:-course}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-course_dev_only}
+      SPARK_LOCAL_IP: 127.0.0.1
+    ports:
+      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:9870:9870"
+      - "127.0.0.1:8088:8088"
+      - "127.0.0.1:4040:4040"
+    volumes:
+      - hadoop-data:/hadoop-data
+      - ./backend:/workspace/backend
+      - ./data:/workspace/data
+      - ./config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - ./config/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml:ro
+      - ./config/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "6"
+          memory: 10G
+    networks: [bigdata]
+
+  frontend:
+    image: node:24.21.0-alpine
+    container_name: fkusoft-bigdata-frontend
+    working_dir: /app
+    restart: unless-stopped
+    depends_on: [backend]
+    environment:
+      NPM_CONFIG_REGISTRY: https://registry.npmmirror.com
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    networks: [bigdata]
+
+networks:
+  bigdata:
+
+volumes:
+  hadoop-data:
+  mysql-data:
+  frontend-node-modules:
