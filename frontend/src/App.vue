@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import axios from 'axios';
 import type { EChartsOption } from 'echarts';
 import Chart from './components/Chart.vue';
+import HeaderDecoration from './components/HeaderDecoration.vue';
 
 type Row = Record<string, string | number>;
 interface Dashboard {
@@ -146,7 +147,7 @@ const panels = computed(() => [
       <div class="brand"><span class="brand-mark">ϟ</span><div><h1>电动汽车充电站监测</h1></div></div>
       <div class="header-meta"><span class="live-dot" /> {{ data ? '分析数据已连接' : '等待数据连接' }}<br><small>HDFS · HIVE · SPARK · MYSQL</small></div>
     </header>
-    <dv-decoration-5 :dur="3" style="height:28px;width:100%" />
+    <HeaderDecoration />
     <section class="toolbar" aria-label="展示控制">
       <p><span>{{ data ? '数据生成于 ' + new Date(data.generated_at).toLocaleString('zh-CN') : '加载中' }}</span></p>
       <div><label for="metric">分析指标</label> <select id="metric" v-model="metric"><option value="energy">充电电量 (kWh)</option><option value="sessions">订单数量 (单)</option></select><button @click="refresh" :disabled="loading">{{ loading ? '加载中…' : '刷新数据' }}</button></div>
