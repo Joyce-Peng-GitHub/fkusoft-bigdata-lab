@@ -42,6 +42,7 @@ services:
       - "127.0.0.1:${SPARK_PORT:-4040}:4040"
     volumes:
       - hadoop-data:/hadoop-data
+      - ./tests:/workspace/tests:ro
       - ./spark:/workspace/spark:ro
       - ./scripts:/workspace/scripts:ro
       - ./backend:/workspace/backend

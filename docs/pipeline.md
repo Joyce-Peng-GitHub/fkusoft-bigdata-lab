@@ -16,3 +16,13 @@ Hive 使用 Spark 内置 Hive 支持，Derby metastore 持久化到 `/hadoop-dat
 订单类型转换失败、负电量/费用、非正时长、日期倒序等进入 `dwd.rejected_sessions`。
 完全重复订单去重，冲突主键立即报错；缺站点资料保留订单并使用站点编号。
 每个聚合维度验证订单数等于 DWD 总数；输出质量计数随 API 提供。
+
+## REST 接口
+
+- `GET /api/health`：已发布数据就绪返回 200；尚未发布或数据库故障返回 503。
+- `GET /api/dashboard`：指标、12 组分析、电池统计、数据质量和生成时间。
+- `GET /api/analysis/<dimension>`：单维或交叉分析；未知维度返回 404。
+
+Flask 只查询 MySQL，不在请求线程执行 Spark，也不回退到本地文件或模拟数据。
+MySQL `dashboard_snapshot` 保存 ADS 的完整 JSON 契约；单行事务更新保证请求读取同一批次。
+重复执行流水线覆盖 Hive 表和 MySQL 快照，不累加数据。失败时大屏仍可读取上次成功发布的数据，生成时间用于识别旧批次。
