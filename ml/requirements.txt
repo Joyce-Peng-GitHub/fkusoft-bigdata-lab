@@ -1,0 +1,9 @@
+# NCS 充电桩 ML 子系统依赖
+# 安装（走国内源）：
+#   python3 -m venv ml/venv
+#   ml/venv/bin/pip install --only-binary=:all: -r ml/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+#
+# 注意：PySpark 不通过 pip 安装，使用 Spark 自带的（见 ml/run 脚本里的 PYTHONPATH）。
+pandas>=2.3,<3
+scikit-learn>=1.5,<2
+chinesecalendar>=1.9
