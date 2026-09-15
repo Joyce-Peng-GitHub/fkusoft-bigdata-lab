@@ -25,13 +25,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Course data: commit only reproducible samples
-data/raw/*
+# Course data: commit source files, ignore generated results
 data/processed/*
-!data/raw/.gitkeep
 !data/processed/.gitkeep
-!data/sample/
-!data/sample/**
 
 # Spark and Hadoop runtime files
 spark-warehouse/
