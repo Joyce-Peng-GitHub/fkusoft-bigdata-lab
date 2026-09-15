@@ -33,25 +33,30 @@ async function refresh() {
 onMounted(() => { void refresh(); timer = setInterval(refresh, 60000); });
 onBeforeUnmount(() => { clearInterval(timer); controller?.abort(); });
 const number = (n: number, digits = 0) => n.toLocaleString('zh-CN', { maximumFractionDigits: digits });
+// Format only at the presentation boundary: keep raw values for chart geometry,
+// rankings and aggregation. Counts are integral; measured values use two decimals.
+const metricNumber = (value: unknown) => number(Number(value), metric.value === 'sessions' ? 0 : 2);
+const metricTooltip = (value: unknown) => `${metricNumber(value)} ${unit.value}`;
+const axisNumber = (value: number) => number(value, 2);
 const rows = (key: string) => data.value?.dimensions[key] ?? [];
 const colors = ['#31e6c5', '#48a9ff', '#a195ff', '#ffc46c', '#ff789a'];
 const base: EChartsOption = {
   color: colors, backgroundColor: 'transparent',
   textStyle: { color: '#9cb8ce', fontFamily: 'sans-serif' },
-  tooltip: { trigger: 'axis' },
+  tooltip: { trigger: 'axis', valueFormatter: metricTooltip },
   grid: { left: 55, right: 22, top: 35, bottom: 46 },
 };
 function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): EChartsOption {
   const values = rows(key);
   return { ...base,
     xAxis: { type: 'category', data: values.map(r => String(r[field])), axisLabel: { hideOverlap: true } },
-    yAxis: { type: 'value', name: unit.value, splitLine: { lineStyle: { color: '#163349' } } },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber }, splitLine: { lineStyle: { color: '#163349' } } },
     series: [{ type, data: values.map(r => Number(r[metric.value])), smooth: true,
       ...(type === 'line' ? { areaStyle: { opacity: 0.13 } } : { barMaxWidth: 26 }) }],
   };
 }
 function donut(key: string, field: string): EChartsOption {
-  return { ...base, tooltip: { trigger: 'item', valueFormatter: value => `${value} ${unit.value}` },
+  return { ...base, tooltip: { trigger: 'item', valueFormatter: metricTooltip },
     legend: { bottom: 0, textStyle: { color: '#9cb8ce' } },
     series: [{ type: 'pie', radius: ['43%', '68%'], center: ['50%', '44%'],
       label: { color: '#cce3ef', formatter: '{b}\n{d}%' },
@@ -72,7 +77,7 @@ const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday
 const stations = computed<EChartsOption>(() => {
   const top = [...rows('station')].sort((a,b) => Number(b[metric.value])-Number(a[metric.value])).slice(0,10).reverse();
   return { ...base, grid: { left: 78, right: 35, top: 20, bottom: 28 },
-    xAxis: { type: 'value', name: unit.value }, yAxis: { type: 'category', data: top.map(r => String(r.station)) },
+    xAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber } }, yAxis: { type: 'category', data: top.map(r => String(r.station)) },
     series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
       itemStyle: { borderRadius: [0, 5, 5, 0] } }],
   };
@@ -82,7 +87,7 @@ const comparison = computed<EChartsOption>(() => {
   const facilities = [...new Set(rows('platform_facility').map(r => String(r.facility)))].sort();
   return { ...base, legend: { top: 0, textStyle: { color: '#9cb8ce' } },
     xAxis: { type: 'category', data: facilities.map(f => `类型 ${f}`) },
-    yAxis: { type: 'value', name: unit.value },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber } },
     series: platforms.map(p => ({ name: p, type: 'bar', barMaxWidth: 20,
       data: facilities.map(f => Number(rows('platform_facility').find(r => r.platform === p && String(r.facility) === f)?.[metric.value] ?? 0)) })),
   };
@@ -90,10 +95,14 @@ const comparison = computed<EChartsOption>(() => {
 const heatmap = computed<EChartsOption>(() => {
   const values = rows('weekday_hour');
   return { ...base, grid: { left: 40, right: 15, top: 20, bottom: 60 },
-    tooltip: { position: 'top' },
+    tooltip: { position: 'top', formatter: params => {
+      const item = Array.isArray(params) ? params[0]! : params;
+      const [hour, day, value] = item.value as number[];
+      return `周${['一','二','三','四','五','六','日'][day!]} ${hour}时<br/>${metricTooltip(value)}`;
+    } },
     xAxis: { type: 'category', data: Array.from({length:24},(_,i) => `${i}时`), splitArea: { show: true } },
     yAxis: { type: 'category', data: ['周一','周二','周三','周四','周五','周六','周日'] },
-    visualMap: { min: 0, max: Math.max(1,...values.map(r => Number(r[metric.value]))), calculable: true,
+    visualMap: { formatter: metricNumber, min: 0, max: Math.max(1,...values.map(r => Number(r[metric.value]))), calculable: true,
       orient: 'horizontal', left: 'center', bottom: 0, textStyle: { color: '#9cb8ce' },
       inRange: { color: ['#10293d','#17638a','#31e6c5'] } },
     series: [{ type: 'heatmap', data: Array.from({length:168},(_,i) => {
@@ -103,9 +112,13 @@ const heatmap = computed<EChartsOption>(() => {
   };
 });
 const battery = computed<EChartsOption>(() => ({ ...base,
-  tooltip: { trigger: 'item' },
+  tooltip: { trigger: 'item', formatter: params => {
+    const item = Array.isArray(params) ? params[0]! : params;
+    const [soc, temperature, samples] = item.value as number[];
+    return `SOC 分段下界：${number(soc!)}%<br/>平均最高温度：${number(temperature!, 2)} ℃<br/>采样量：${number(samples!)} 条`;
+  } },
   xAxis: { type: 'value', name: 'SOC 分段下界 (%)', min: 0, max: 100 },
-  yAxis: { type: 'value', name: '平均最高温度 (℃)' },
+  yAxis: { type: 'value', name: '平均最高温度 (℃)', axisLabel: { formatter: axisNumber } },
   series: [{ type: 'scatter', symbolSize: value => Math.max(10, Math.sqrt(Number(value[2]))*2),
     data: data.value?.battery.map(r => [r.soc_band, r.temperature, r.samples]) ?? [] }],
 }));

@@ -25,3 +25,8 @@ ODS / DWD / DWS / ADS 均通过 Spark Hive catalog 持久化；每次成功作�
 第二轮两位均报告无剩余可操作问题。
 
 浏览器测试按图表容器及其 canvas 检查渲染，不将 canvas 个数等同图表个数，因为 ECharts 可为单张图创建多个图层。
+
+## 浮点显示修复
+
+真实 Chromium / ECharts 提示曾复现 `123.99999999999993`。展示层格式化后，13 个图表的提示均显示舍入值（例如 `124`），不再泄露浮点尾差；TypeScript 和生产构建通过。子代理复核无可操作问题。
+使用与浏览器回归相同的 playwright-core / Chromium 环境执行 `node tests/precision-smoke.cjs`；该脚本面向 Vite 开发服务，通过实际加载的 ECharts 模块触发提示。
