@@ -96,6 +96,13 @@ def main():
         agg.write.mode('overwrite').saveAsTable('dws.' + name)
         spark.table('dws.' + name).write.mode('overwrite').saveAsTable('ads.' + name)
         rows = [r.asDict() for r in spark.table('ads.' + name).orderBy(*keys).collect()]
+        # Interval labels are presentation strings; lexical order is not numeric order.
+        interval_orders = {
+            'duration': ['<1h', '1–3h', '3–6h', '≥6h'],
+            'energy': ['<5kWh', '5–10kWh', '10–20kWh', '≥20kWh'],
+        }
+        if name in interval_orders:
+            rows.sort(key=lambda row: interval_orders[name].index(row[keys[0]]))
         if sum(r['sessions'] for r in rows) != total:
             raise RuntimeError('Dimension reconciliation failed: ' + name)
         dimensions[name] = rows

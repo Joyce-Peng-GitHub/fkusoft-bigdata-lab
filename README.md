@@ -39,3 +39,12 @@ docker compose exec backend python -c "import urllib.request; print(urllib.reque
 [数据口径、仓库分层和 API](docs/pipeline.md)。10 个独立维度和 2 个交叉对比均来自真实 Spark 聚合；支持电量和订单量切换。
 图表包含面积折线、排行条形、环形、分组柱状、热力图、气泡散点。DataV 提供大屏边框和动态装饰。
 不使用随机值或模拟数据；后端不可用时明确提示，已有结果保留并展示生成时间。
+
+浏览器回归脚本位于 `tests/browser-smoke.cjs`。在安装了 `playwright-core` 与 Chromium 的测试环境中执行：
+
+```sh
+BASE_URL=http://localhost:5173 CHROMIUM_PATH=/usr/bin/chromium node tests/browser-smoke.cjs
+```
+
+检查 13 个图表、指标切换、390px 窄屏布局、服务失败时保留旧数据和首次加载失败提示。
+`tests/test_warehouse.py` 使用标准库独立复算随仓库提供的数据集，校验总量、两组交叉分析及区间顺序；需先成功运行批处理。
