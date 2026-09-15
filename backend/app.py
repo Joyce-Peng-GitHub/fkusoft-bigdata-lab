@@ -1,32 +1,77 @@
-import os
+"""Flask REST API serving the last successfully published MySQL ADS snapshot."""
+import json
 
 import mysql.connector
 from flask import Flask, jsonify
 
+from db import database_connection
+
 app = Flask(__name__)
 
 
-def database_connection():
-    return mysql.connector.connect(
-        host=os.getenv("MYSQL_HOST", "mysql"),
-        port=int(os.getenv("MYSQL_PORT", "3306")),
-        database=os.getenv("MYSQL_DATABASE", "bigdata"),
-        user=os.getenv("MYSQL_USER", "course"),
-        password=os.getenv("MYSQL_PASSWORD", "course_dev_only"),
-    )
+def snapshot():
+    """Read one consistent warehouse snapshot.
 
+    Returns:
+        dict | None: Published ADS payload, or None before the first publication.
 
-@app.get("/api/health")
-def health():
+    Raises:
+        mysql.connector.Error: MySQL query or connection failed.
+    """
     with database_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT VERSION()")
-            mysql_version = cursor.fetchone()[0]
+            cursor.execute('SELECT payload FROM dashboard_snapshot WHERE id=1')
+            row = cursor.fetchone()
+    return json.loads(row[0]) if row else None
 
-    return jsonify(
-        status="ok",
-        python="3.12",
-        hadoop="3.5.0",
-        pyspark="4.2.0",
-        mysql=mysql_version,
-    )
+
+@app.errorhandler(mysql.connector.Error)
+def database_error(error):
+    """Return a retryable status without leaking database credentials or SQL.
+
+    Args:
+        error: Connector exception recorded in the server log.
+
+    Returns:
+        tuple: JSON error response and HTTP 503.
+    """
+    app.logger.warning('Database unavailable: %s', type(error).__name__)
+    return jsonify(error='数据尚未就绪或数据库暂不可用，请稍后重试'), 503
+
+
+@app.get('/api/health')
+def health():
+    """Report readiness of the published data, not just process liveness."""
+    data = snapshot()
+    if data is None:
+        return jsonify(status='not_ready'), 503
+    return jsonify(status='ok', generated_at=data['generated_at'])
+
+
+@app.get('/api/dashboard')
+def dashboard():
+    """Return all dashboard metrics from one MySQL snapshot."""
+    data = snapshot()
+    if data is None:
+        return jsonify(error='尚未发布分析结果，请先运行数据流水线'), 503
+    response = jsonify(data)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.get('/api/analysis/<dimension>')
+def analysis(dimension):
+    """Return one allowlisted analysis dimension without interpolating SQL.
+
+    Args:
+        dimension: Dimension key present in the published ADS snapshot.
+
+    Returns:
+        tuple | Response: JSON analysis or a 404/503 error response.
+    """
+    data = snapshot()
+    if data is None:
+        return jsonify(error='尚未发布分析结果'), 503
+    if dimension not in data['dimensions']:
+        return jsonify(error='未知分析维度'), 404
+    return jsonify(dimension=dimension, rows=data['dimensions'][dimension])
