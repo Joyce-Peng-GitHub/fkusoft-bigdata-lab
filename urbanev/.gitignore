@@ -1,0 +1,7 @@
+# UrbanEV 数据不入版本库（约 110MB，CC0，可随时重新下载）
+data/
+# Python 运行产物
+ml/venv/
+__pycache__/
+*.pkl
+*_result.csv
