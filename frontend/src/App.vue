@@ -76,7 +76,8 @@ const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday
 }));
 const stations = computed<EChartsOption>(() => {
   const top = [...rows('station')].sort((a,b) => Number(b[metric.value])-Number(a[metric.value])).slice(0,10).reverse();
-  return { ...base, grid: { left: 78, right: 35, top: 20, bottom: 28 },
+  return { ...base, grid: { left: 78, right: 35, top: 20, bottom: 48 },
+    graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '编号 / 贡献', fill: '#9cb8ce', fontSize: 10 } }],
     xAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber } }, yAxis: { type: 'category', data: top.map(r => String(r.station)) },
     series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
       itemStyle: { borderRadius: [0, 5, 5, 0] } }],
@@ -124,13 +125,13 @@ const battery = computed<EChartsOption>(() => ({ ...base,
 }));
 const panels = computed(() => [
   { title:'月度充电趋势', note:'2014.11 — 2015.10', option:trend.value },
-  { title:'平台构成', note:'移动端与 Web', option:platform.value },
-  { title:'站点贡献 TOP 10', note:'按当前指标排名 · 站点编号', option:stations.value },
+  { title:'平台构成', option:platform.value },
+  { title:'站点贡献 TOP 10', option:stations.value },
   { title:'星期 × 小时分布', note:`交叉对比 01 · ${unit.value}`, option:heatmap.value, wide:true },
   { title:'平台 × 设施类型', note:'交叉对比 02 · 分组柱状', option:comparison.value },
   { title:'小时充电分布', note:'按订单开始时间', option:hourly.value },
-  { title:'每周充电节律', note:'星期由修正日期重新计算', option:weekday.value },
-  { title:'设施类型构成', note:'保留源数据类型编码', option:facility.value },
+  { title:'每周充电节律', option:weekday.value },
+  { title:'设施类型构成', option:facility.value },
   { title:'充电时长分布', note:'按订单时长分段', option:duration.value },
   { title:'单次电量分布', note:'按订单电量分段', option:energy.value },
   { title:'地点对比', note:'地点编号', option:location.value },
@@ -142,12 +143,12 @@ const panels = computed(() => [
 <template>
   <main>
     <header>
-      <div class="brand"><span class="brand-mark">ϟ</span><div><p class="eyebrow">CHARGING INTELLIGENCE / 郑州</p><h1>城市充电能源监测中心</h1></div></div>
+      <div class="brand"><span class="brand-mark">ϟ</span><div><h1>电动汽车充电站监测</h1></div></div>
       <div class="header-meta"><span class="live-dot" /> {{ data ? '分析数据已连接' : '等待数据连接' }}<br><small>HDFS · HIVE · SPARK · MYSQL</small></div>
     </header>
     <dv-decoration-5 :dur="3" style="height:28px;width:100%" />
     <section class="toolbar" aria-label="展示控制">
-      <p>充电行为洞察 <span>/ {{ data ? '发布于 ' + new Date(data.generated_at).toLocaleString('zh-CN') : '加载中' }}</span></p>
+      <p><span>{{ data ? '数据生成于 ' + new Date(data.generated_at).toLocaleString('zh-CN') : '加载中' }}</span></p>
       <div><label for="metric">分析指标</label> <select id="metric" v-model="metric"><option value="energy">充电电量 (kWh)</option><option value="sessions">订单数量 (单)</option></select><button @click="refresh" :disabled="loading">{{ loading ? '加载中…' : '刷新数据' }}</button></div>
     </section>
     <p v-if="error" class="message error" role="alert">{{ error }} {{ data ? '当前保留上次成功获取的数据。' : '' }}</p>
@@ -164,12 +165,11 @@ const panels = computed(() => [
       </section>
       <section class="charts" aria-label="多维分析图表">
         <dv-border-box-12 v-for="panel in panels" :key="panel.title" class="panel" :class="{wide:panel.wide}" :color="['#20425e','#32cdb7']">
-          <article><h2>{{ panel.title }}</h2><p class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" /></article>
+          <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" /></article>
         </dv-border-box-12>
       </section>
       <footer>
         <strong>数据质量</strong> · 有效订单 {{ number(data.quality.accepted_sessions) }} / {{ number(data.quality.source_rows.sessions ?? 0) }} · 异常隔离 {{ data.quality.rejected_sessions }} · 去重 {{ data.quality.duplicates_removed }} · 电池记录 {{ number(data.quality.battery_accepted) }}
-        <p>年份 0014 / 0015 按 2014 / 2015 解释；站点资料为后期快照。电池时间精度丢失，不作时间关联。费用币种未提供，按原始金额汇总。</p>
       </footer>
     </template>
   </main>
@@ -177,5 +177,5 @@ const panels = computed(() => [
 
 <style>
 :root{font-family:Inter,"Microsoft YaHei",sans-serif;color:#dfedf7;background:#07111e;font-synthesis:none;color-scheme:dark}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 0,#14344b80,transparent 65%),#07111e}button,select{font:inherit}main{max-width:1920px;margin:auto;padding:26px 32px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{display:flex;align-items:center;gap:16px}.brand-mark{display:grid;place-items:center;width:48px;height:56px;color:#39e1bd;font-size:44px;border:1px solid #2a6972;border-radius:12px;background:#15343d}.eyebrow{color:#64bfbf;font-size:10px;letter-spacing:3px;margin:0 0 7px}h1{font-size:27px;letter-spacing:4px;margin:0}.header-meta{font-size:13px;text-align:right;line-height:1.9;color:#a6c5d3}.header-meta small{font-size:9px;letter-spacing:2px;color:#54788e}.live-dot{display:inline-block;width:7px;height:7px;background:#36dfb7;border-radius:50%;box-shadow:0 0 10px #36dfb7;margin-right:5px}.toolbar{display:flex;justify-content:space-between;align-items:center;margin:10px 0 22px;gap:12px}.toolbar p{font-size:14px}.toolbar span{font-size:11px;color:#7395aa;margin-left:8px}.toolbar label{font-size:12px;color:#87a8be}select,button{background:#122b40;border:1px solid #2b4b62;border-radius:5px;padding:8px 12px;color:#d2eaf5;font-size:12px}button{margin-left:10px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}.kpis article{padding:20px 22px;background:linear-gradient(115deg,#17374a90,#0c203580);border:1px solid #244256;border-top:2px solid #33c7b5;border-radius:5px}.kpis span{display:block;color:#8cabbf;font-size:12px}.kpis strong{display:block;font-size:32px;color:#ddf9f3;letter-spacing:1px;margin:9px 0 3px;font-variant-numeric:tabular-nums}.kpis small{color:#558ca3;font-size:10px}.charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.panel{min-width:0;background:#0c1c2d88;min-height:332px}.panel.wide{grid-column:span 2}.panel article{padding:20px 18px 12px}h2{font-size:14px;letter-spacing:1px;margin:0;border-left:3px solid #36d5bf;padding-left:9px}.panel-note{color:#597e97;font-size:10px;margin:7px 0 0 12px}footer{font-size:11px;color:#83a2b6;border-top:1px solid #1a3448;padding:22px 0 0;margin-top:24px;line-height:1.8}footer strong{color:#39c4ad}footer p{color:#55788f}.message{padding:24px;border:1px solid #27475e;text-align:center}.error{color:#ffbc88;border-color:#81553b}select:focus-visible,button:focus-visible{outline:2px solid #31e6c5;outline-offset:3px}@media(min-width:1600px){.chart{height:290px!important}}@media(max-width:1000px){.charts{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis{grid-template-columns:repeat(3,1fr)}.toolbar{align-items:flex-start;flex-direction:column}h1{font-size:22px}}@media(max-width:620px){main{padding:18px 12px}.header-meta{display:none}h1{font-size:19px;letter-spacing:1px}.kpis{grid-template-columns:repeat(2,1fr);gap:10px}.kpis article{padding:14px}.kpis strong{font-size:25px}.charts{grid-template-columns:1fr}.panel.wide{grid-column:auto}.toolbar span{display:block;margin:6px 0 0}}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 0,#14344b80,transparent 65%),#07111e}button,select{font:inherit}main{max-width:1920px;margin:auto;padding:26px 32px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{display:flex;align-items:center;gap:16px}.brand-mark{display:grid;place-items:center;width:48px;height:56px;color:#39e1bd;font-size:44px;border:1px solid #2a6972;border-radius:12px;background:#15343d}h1{font-size:27px;letter-spacing:4px;margin:0}.header-meta{font-size:13px;text-align:right;line-height:1.9;color:#a6c5d3}.header-meta small{font-size:9px;letter-spacing:2px;color:#54788e}.live-dot{display:inline-block;width:7px;height:7px;background:#36dfb7;border-radius:50%;box-shadow:0 0 10px #36dfb7;margin-right:5px}.toolbar{display:flex;justify-content:space-between;align-items:center;margin:10px 0 22px;gap:12px}.toolbar p{font-size:14px}.toolbar span{font-size:11px;color:#7395aa;margin-left:8px}.toolbar label{font-size:12px;color:#87a8be}select,button{background:#122b40;border:1px solid #2b4b62;border-radius:5px;padding:8px 12px;color:#d2eaf5;font-size:12px}button{margin-left:10px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}.kpis article{padding:20px 22px;background:linear-gradient(115deg,#17374a90,#0c203580);border:1px solid #244256;border-top:2px solid #33c7b5;border-radius:5px}.kpis span{display:block;color:#8cabbf;font-size:12px}.kpis strong{display:block;font-size:32px;color:#ddf9f3;letter-spacing:1px;margin:9px 0 3px;font-variant-numeric:tabular-nums}.kpis small{color:#558ca3;font-size:10px}.charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.panel{min-width:0;background:#0c1c2d88;min-height:332px}.panel.wide{grid-column:span 2}.panel article{padding:20px 18px 12px}h2{font-size:14px;letter-spacing:1px;margin:0;border-left:3px solid #36d5bf;padding-left:9px}.panel-note{color:#597e97;font-size:10px;margin:7px 0 0 12px}footer{font-size:11px;color:#83a2b6;border-top:1px solid #1a3448;padding:22px 0 0;margin-top:24px;line-height:1.8}footer strong{color:#39c4ad}.message{padding:24px;border:1px solid #27475e;text-align:center}.error{color:#ffbc88;border-color:#81553b}select:focus-visible,button:focus-visible{outline:2px solid #31e6c5;outline-offset:3px}@media(min-width:1600px){.chart{height:290px!important}}@media(max-width:1000px){.charts{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis{grid-template-columns:repeat(3,1fr)}.toolbar{align-items:flex-start;flex-direction:column}h1{font-size:22px}}@media(max-width:620px){main{padding:18px 12px}.header-meta{display:none}h1{font-size:19px;letter-spacing:1px}.kpis{grid-template-columns:repeat(2,1fr);gap:10px}.kpis article{padding:14px}.kpis strong{font-size:25px}.charts{grid-template-columns:1fr}.panel.wide{grid-column:auto}.toolbar span{display:block;margin:6px 0 0}}
 </style>
