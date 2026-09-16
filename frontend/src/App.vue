@@ -54,7 +54,7 @@ function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): ECh
   const values = rows(key);
   return { ...base,
     xAxis: { type: 'category', data: values.map(r => String(r[field])), axisLabel: { hideOverlap: true } },
-    yAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber }, splitLine: { lineStyle: { color: '#163349' } } },
+    yAxis: { type: 'value', name: unit.value, splitNumber: 3, axisLabel: { formatter: axisNumber }, splitLine: { lineStyle: { color: '#163349' } } },
     series: [{ type, data: values.map(r => Number(r[metric.value])), smooth: true,
       ...(type === 'line' ? { areaStyle: { opacity: 0.13 } } : { barMaxWidth: 26 }) }],
   };
@@ -217,7 +217,7 @@ const panels = computed(() => {
       </section>
       <section class="charts" :class="[`charts-${panels.length}`, `charts-${activePage}`]" aria-label="多维分析图表">
         <dv-border-box-12 v-for="panel in panels" :key="panel.title" class="panel" :color="['#20425e','#32cdb7']">
-          <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" :plot-aspect-ratio="panel.plotAspectRatio" /></article>
+          <article><div class="panel-heading"><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p></div><Chart :option="panel.option" :label="panel.title" :plot-aspect-ratio="panel.plotAspectRatio" /></article>
         </dv-border-box-12>
       </section>
       <footer>
@@ -245,8 +245,12 @@ select,button{max-width:100%;background:#122b40;border:1px solid #2b4b62;border-
 /* Flex parents must allow shrinking so ECharts follows the available viewport
    height. Small/short windows use natural scrolling below instead of clipping. */
 .charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;flex:1;min-height:0}.charts-1{grid-template-columns:minmax(0,1fr)}.charts-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.panel{min-width:0;min-height:0;background:#0c1c2d88}.panel .border-box-content{min-height:0;height:100%}.panel article{display:flex;flex-direction:column;height:100%;min-height:0;padding:18px 12px 10px;gap:8px}.panel h2{flex-shrink:0}.panel-note{color:#7395aa;font-size:10px;margin:0 0 0 12px;flex-shrink:0}
-footer{font-size:10px;color:#83a2b6;border-top:1px solid #1a3448;padding-top:8px;line-height:1.8;flex-shrink:0}footer strong{color:#39c4ad}.message{margin:0;padding:12px;border:1px solid #27475e;text-align:center;font-size:12px;flex-shrink:0}.error{color:#ffbc88;border-color:#81553b}select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #31e6c5;outline-offset:3px}
+.panel{min-width:0;min-height:0;background:#0c1c2d88}.panel .border-box-content{min-height:0;height:100%}.panel article{display:flex;flex-direction:column;height:100%;min-height:0;padding:18px 12px 10px;gap:8px}.panel-heading{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;flex-shrink:0}.panel h2{flex-shrink:0}.panel-note{color:#7395aa;font-size:10px;margin:0;flex-shrink:0}
+footer{margin-top:auto;font-size:10px;color:#83a2b6;border-top:1px solid #1a3448;padding-top:8px;line-height:1.8;flex-shrink:0}footer strong{color:#39c4ad}.message{margin:0;padding:12px;border:1px solid #27475e;text-align:center;font-size:12px;flex-shrink:0}.error{color:#ffbc88;border-color:#81553b}select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #31e6c5;outline-offset:3px}
+/* Sparse pages keep bounded reading sizes instead of enlarging to fill a wall.
+   Flex shrinking still lets the overview share the viewport with its KPI row. */
+.charts-2{width:100%;max-width:1360px;align-self:center;flex:0 1 auto;height:clamp(300px,32vw,440px)}
+.charts-battery{width:100%;max-width:900px;align-self:center;flex:0 1 auto;height:clamp(320px,36vw,460px)}
 /* Time analysis needs a broad heatmap above two supporting charts. Platform
    comparison gets a broad left column and compact composition charts on the right. */
 .charts-time{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1.4fr) minmax(0,1fr);max-width:1400px;width:100%;align-self:center;max-height:720px}
@@ -254,6 +258,6 @@ footer{font-size:10px;color:#83a2b6;border-top:1px solid #1a3448;padding-top:8px
 .charts-platform{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr));max-width:1280px;width:100%;align-self:center;max-height:680px}
 .charts-platform .panel:first-child{grid-row:1 / 3}
 @media(max-width:1100px){.dashboard-shell{grid-template-columns:146px minmax(0,1fr)}main{padding:16px}.sidebar{padding:20px 8px}.sidebar-brand{gap:6px;padding-inline:0}.sidebar-brand span{font-size:13px}.header-meta{display:none}h1{font-size:20px}.charts{gap:10px}.panel article{padding-inline:8px}}
-@media(max-width:900px),(max-height:619px){.dashboard-shell{height:auto;min-height:100dvh}main{height:auto;min-height:100dvh}.charts{flex:none;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:320px}.charts-1{grid-template-columns:minmax(0,1fr)}.charts-time,.charts-platform{max-height:none;grid-template-rows:none}.charts-time .panel:first-child,.charts-platform .panel:first-child{grid-column:1/-1;grid-row:auto}.forecast-panel{min-height:360px}.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px),(max-height:719px){.dashboard-shell{height:auto;min-height:100dvh}main{height:auto;min-height:100dvh}.charts{flex:none;height:auto;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:320px}.charts-1{grid-template-columns:minmax(0,1fr)}.charts-time,.charts-platform{max-height:none;grid-template-rows:none}.charts-time .panel:first-child,.charts-platform .panel:first-child{grid-column:1/-1;grid-row:auto}.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.dashboard-shell{grid-template-columns:minmax(0,1fr)}.sidebar{padding:10px 12px;border-right:0;border-bottom:1px solid #20425e}.sidebar-brand,.sidebar-note{display:none}.sidebar nav{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.sidebar a{justify-content:center;padding:10px 3px;font-size:12px}.nav-index{display:none}main{padding:14px 12px;min-height:0}.brand-mark{width:30px;height:34px;font-size:28px}h1{font-size:18px;letter-spacing:1px}.page-heading{align-items:flex-start;flex-direction:column;gap:7px}.charts{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis strong{font-size:22px}}
 </style>
