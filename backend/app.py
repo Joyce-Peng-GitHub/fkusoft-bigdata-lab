@@ -1,7 +1,5 @@
-"""Serve the published MySQL analytics snapshot and atomic ML forecast artifact."""
+"""Serve the published MySQL analytics and ML forecast snapshots."""
 import json
-import os
-from pathlib import Path
 
 import mysql.connector
 from flask import Flask, jsonify
@@ -23,6 +21,22 @@ def snapshot():
     with database_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute('SELECT payload FROM dashboard_snapshot WHERE id=1')
+            row = cursor.fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def forecast_snapshot():
+    """Read the latest complete ML forecast snapshot.
+
+    Returns:
+        dict | None: Published forecast payload, or None before the first run.
+
+    Raises:
+        mysql.connector.Error: MySQL query or connection failed.
+    """
+    with database_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT payload FROM forecast_snapshot WHERE id=1')
             row = cursor.fetchone()
     return json.loads(row[0]) if row else None
 
@@ -81,18 +95,15 @@ def analysis(dimension):
 
 @app.get('/api/ml/forecast')
 def forecast():
-    """Serve the last complete forecast without requiring MySQL availability.
+    """Serve the last complete MySQL forecast snapshot.
 
     Returns:
-        Response | tuple: Actual history and future estimates, or a retryable 503
-        before prediction has run or when its shared artifact cannot be read.
+        tuple | Response: Actual history and future estimates, or a retryable 503
+        before prediction has run.
     """
-    path = Path(os.getenv('FORECAST_PATH', str(
-        Path(__file__).resolve().parents[1] / 'data/processed/forecast.json')))
-    try:
-        payload = json.loads(path.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
+    data = forecast_snapshot()
+    if data is None:
         return jsonify(error='预测结果尚未就绪，请先运行预测任务'), 503
-    response = jsonify(payload)
+    response = jsonify(data)
     response.headers['Cache-Control'] = 'no-store'
     return response
