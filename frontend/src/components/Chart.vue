@@ -15,4 +15,4 @@ watch(() => props.option, option => chart?.setOption(option, true));
 onBeforeUnmount(() => { observer?.disconnect(); chart?.dispose(); });
 </script>
 <template><div ref="element" class="chart" role="img" :aria-label="label" /></template>
-<style scoped>.chart { width: 100%; height: 260px; min-width: 0; }</style>
+<style scoped>.chart { width: 100%; height: 100%; flex: 1; min-height: 0; min-width: 0; }</style>
