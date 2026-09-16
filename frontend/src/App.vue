@@ -99,7 +99,7 @@ const comparison = computed<EChartsOption>(() => {
 });
 const heatmap = computed<EChartsOption>(() => {
   const values = rows('weekday_hour');
-  return { ...base, grid: { left: 40, right: 15, top: 20, bottom: 60 },
+  return { ...base, grid: { left: 40, right: 15, top: 12, bottom: 72 },
     tooltip: { position: 'top', formatter: params => {
       const item = Array.isArray(params) ? params[0]! : params;
       const [hour, day, value] = item.value as number[];
@@ -146,14 +146,15 @@ function syncPage() {
 onMounted(() => { syncPage(); window.addEventListener('hashchange', syncPage); });
 onBeforeUnmount(() => window.removeEventListener('hashchange', syncPage));
 const currentPage = computed(() => pages.find(page => page.id === activePage.value)!);
+interface Panel { title: string; note?: string; option: EChartsOption; plotAspectRatio?: number }
 const panels = computed(() => {
-  const groups = {
+  const groups: Record<PageId, Panel[]> = {
     overview: [
       { title: '月度充电趋势', note: '2014.11 — 2015.10', option: trend.value },
       { title: '站点贡献 TOP 10', option: stations.value },
     ],
     time: [
-      { title: '星期 × 小时分布', note: `交叉对比 · ${unit.value}`, option: heatmap.value },
+      { title: '星期 × 小时分布', note: `交叉对比 · ${unit.value}`, option: heatmap.value, plotAspectRatio: (24 / 7) * 1.4 },
       { title: '小时充电分布', note: '按订单开始时间', option: hourly.value },
       { title: '每周充电节律', option: weekday.value },
     ],
@@ -214,9 +215,9 @@ const panels = computed(() => {
           ['平均充电时长',number(data.overview.avg_duration,2),'小时'],
         ]" :key="item[0]"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong><small>{{ item[2] }}</small></article>
       </section>
-      <section class="charts" :class="`charts-${panels.length}`" aria-label="多维分析图表">
+      <section class="charts" :class="[`charts-${panels.length}`, `charts-${activePage}`]" aria-label="多维分析图表">
         <dv-border-box-12 v-for="panel in panels" :key="panel.title" class="panel" :color="['#20425e','#32cdb7']">
-          <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" /></article>
+          <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" :plot-aspect-ratio="panel.plotAspectRatio" /></article>
         </dv-border-box-12>
       </section>
       <footer>
@@ -246,7 +247,13 @@ select,button{max-width:100%;background:#122b40;border:1px solid #2b4b62;border-
 .charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;flex:1;min-height:0}.charts-1{grid-template-columns:minmax(0,1fr)}.charts-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .panel{min-width:0;min-height:0;background:#0c1c2d88}.panel .border-box-content{min-height:0;height:100%}.panel article{display:flex;flex-direction:column;height:100%;min-height:0;padding:18px 12px 10px;gap:8px}.panel h2{flex-shrink:0}.panel-note{color:#7395aa;font-size:10px;margin:0 0 0 12px;flex-shrink:0}
 footer{font-size:10px;color:#83a2b6;border-top:1px solid #1a3448;padding-top:8px;line-height:1.8;flex-shrink:0}footer strong{color:#39c4ad}.message{margin:0;padding:12px;border:1px solid #27475e;text-align:center;font-size:12px;flex-shrink:0}.error{color:#ffbc88;border-color:#81553b}select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #31e6c5;outline-offset:3px}
+/* Time analysis needs a broad heatmap above two supporting charts. Platform
+   comparison gets a broad left column and compact composition charts on the right. */
+.charts-time{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1.4fr) minmax(0,1fr);max-width:1400px;width:100%;align-self:center;max-height:720px}
+.charts-time .panel:first-child{grid-column:1/-1}
+.charts-platform{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr));max-width:1280px;width:100%;align-self:center;max-height:680px}
+.charts-platform .panel:first-child{grid-row:1 / 3}
 @media(max-width:1100px){.dashboard-shell{grid-template-columns:146px minmax(0,1fr)}main{padding:16px}.sidebar{padding:20px 8px}.sidebar-brand{gap:6px;padding-inline:0}.sidebar-brand span{font-size:13px}.header-meta{display:none}h1{font-size:20px}.charts{gap:10px}.panel article{padding-inline:8px}}
-@media(max-width:900px),(max-height:619px){.dashboard-shell{height:auto;min-height:100dvh}main{height:auto;min-height:100dvh}.charts{flex:none;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:320px}.charts-1{grid-template-columns:minmax(0,1fr)}.charts-3 .panel:first-child{grid-column:1/-1}.forecast-panel{min-height:360px}.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px),(max-height:619px){.dashboard-shell{height:auto;min-height:100dvh}main{height:auto;min-height:100dvh}.charts{flex:none;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:320px}.charts-1{grid-template-columns:minmax(0,1fr)}.charts-time,.charts-platform{max-height:none;grid-template-rows:none}.charts-time .panel:first-child,.charts-platform .panel:first-child{grid-column:1/-1;grid-row:auto}.forecast-panel{min-height:360px}.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.dashboard-shell{grid-template-columns:minmax(0,1fr)}.sidebar{padding:10px 12px;border-right:0;border-bottom:1px solid #20425e}.sidebar-brand,.sidebar-note{display:none}.sidebar nav{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.sidebar a{justify-content:center;padding:10px 3px;font-size:12px}.nav-index{display:none}main{padding:14px 12px;min-height:0}.brand-mark{width:30px;height:34px;font-size:28px}h1{font-size:18px;letter-spacing:1px}.page-heading{align-items:flex-start;flex-direction:column;gap:7px}.charts{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis strong{font-size:22px}}
 </style>
