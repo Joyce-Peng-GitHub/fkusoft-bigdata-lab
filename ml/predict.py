@@ -124,6 +124,7 @@ def main():
     print(f"预测结果已保存：{OUT_CSV}")
     # Dates follow the source dataset, not the wall clock. Keep actual values and
     # model estimates separate so the web chart cannot imply observed future data.
+    # The CSV is a human-readable copy; MySQL is the artifact the REST API serves.
     publish_forecast({
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "history_end": last_date.strftime("%Y-%m-%d"),
@@ -132,7 +133,8 @@ def main():
                     for _, r in hist.tail(14).iterrows()],
         "forecast": [{"date": r["forecast_date"], "energy": r["pred_kwh"],
                       "sessions": r["pred_sessions"]} for r in rows],
-    }, os.getenv("FORECAST_PATH", os.path.join(ROOT, "data", "processed", "forecast.json")))
+    })
+    print("预测快照已发布到 MySQL（forecast_snapshot）")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@
 #   ml/venv/bin/pip install --only-binary=:all: -r ml/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 #
 # 注意：PySpark 不通过 pip 安装，使用 Spark 自带的（见 ml/run 脚本里的 PYTHONPATH）。
+# mysql-connector-python 与 backend/requirements.txt 保持一致，predict.py 用它把预测快照写入 MySQL。
 pandas>=2.3,<3
 scikit-learn>=1.5,<2
 chinesecalendar>=1.9
+mysql-connector-python==26.7.0
