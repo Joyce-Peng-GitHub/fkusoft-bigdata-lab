@@ -20,9 +20,9 @@ def publish_forecast(payload):
     """校验预测契约，并原子替换对外服务的快照。
 
     Args:
-        payload: 完整的 API payload，包含 ``generated_at``、``history``
-            和 ``forecast`` 字段。原样存储，保证 REST 契约可以仅凭
-            数据库内容完整复现。
+        payload: 完整的 API payload，包含 ``generated_at``、
+            ``history_end``、``history`` 和 ``forecast`` 字段。原样存储，
+            保证 REST 契约可以仅凭数据库内容完整复现。
 
     Raises:
         ValueError: payload 不是完整的预测快照，或含有 JSON 无法安全
@@ -30,14 +30,17 @@ def publish_forecast(payload):
         mysql.connector.Error: 发布事务失败；此时上一次已发布的快照
             保持可读，不受影响。
     """
-    # 契约校验：history 与 forecast 缺一不可，否则拒绝发布
-    if (
-        not isinstance(payload, dict)
-        or not payload.get("history")
-        or not payload.get("forecast")
-    ):
-        raise ValueError("Incomplete forecast snapshot")
-    # allow_nan=False：NaN/Inf 会写出非法 JSON，提前在此失败而不是污染快照
+    if not isinstance(payload, dict):
+        raise ValueError("Forecast snapshot must be a JSON object")
+    # 四个顶层字段共同构成 REST 契约。history 与 forecast 还必须非空，
+    # 避免一次不完整运行覆盖上次可用的预测快照。
+    required_fields = ("generated_at", "history_end", "history", "forecast")
+    missing_fields = [field for field in required_fields if not payload.get(field)]
+    if missing_fields:
+        raise ValueError(
+            f'Incomplete forecast snapshot: missing {", ".join(missing_fields)}'
+        )
+    # allow_nan=False：NaN/Inf 会写出非法 JSON，提前在此失败而不是污染快照。
     encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
     with database_connection() as connection:
         with connection.cursor() as cursor:

@@ -9,6 +9,26 @@ from db import database_connection
 app = Flask(__name__)
 
 
+def _read_json_snapshot(query):
+    """Read one JSON payload using a fixed internal snapshot query.
+
+    Args:
+        query: Constant SQL statement owned by this module. Request data must
+            never be interpolated into it.
+
+    Returns:
+        dict | None: Decoded snapshot payload, or None when no row exists.
+
+    Raises:
+        mysql.connector.Error: MySQL query or connection failed.
+    """
+    with database_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            row = cursor.fetchone()
+    return json.loads(row[0]) if row else None
+
+
 def snapshot():
     """Read one consistent warehouse snapshot.
 
@@ -18,11 +38,8 @@ def snapshot():
     Raises:
         mysql.connector.Error: MySQL query or connection failed.
     """
-    with database_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute('SELECT payload FROM dashboard_snapshot WHERE id=1')
-            row = cursor.fetchone()
-    return json.loads(row[0]) if row else None
+    return _read_json_snapshot(
+        'SELECT payload FROM dashboard_snapshot WHERE id=1')
 
 
 def forecast_snapshot():
@@ -34,11 +51,8 @@ def forecast_snapshot():
     Raises:
         mysql.connector.Error: MySQL query or connection failed.
     """
-    with database_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute('SELECT payload FROM forecast_snapshot WHERE id=1')
-            row = cursor.fetchone()
-    return json.loads(row[0]) if row else None
+    return _read_json_snapshot(
+        'SELECT payload FROM forecast_snapshot WHERE id=1')
 
 
 @app.errorhandler(mysql.connector.Error)
