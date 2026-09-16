@@ -41,9 +41,10 @@ RUN FILE="spark-${SPARK_VERSION}-bin-hadoop3.tgz" && \
     rm "${FILE}"
 
 COPY backend/requirements.txt /tmp/requirements.txt
+COPY ml/requirements.txt /tmp/ml-requirements.txt
 RUN pip install --no-cache-dir \
       -i https://pypi.tuna.tsinghua.edu.cn/simple \
-      -r /tmp/requirements.txt
+      -r /tmp/requirements.txt -r /tmp/ml-requirements.txt
 
 COPY scripts/start-course.sh /usr/local/bin/start-course
 RUN chmod +x /usr/local/bin/start-course

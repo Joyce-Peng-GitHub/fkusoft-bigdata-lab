@@ -15,6 +15,9 @@ NCS 充电桩 ML 子系统 —— 未来 N 天负荷预测（递归多步）
 """
 import os
 import sys
+from datetime import datetime, timezone
+
+from export import publish_forecast
 
 os.environ.setdefault("SPARK_HOME", "/opt/module/spark-3.4.1")
 SPARK_HOME = os.environ["SPARK_HOME"]
@@ -58,6 +61,9 @@ def load_history():
 
 
 def main():
+    """Predict daily load and publish CSV plus the atomic web JSON artifact."""
+    if not 1 <= N_FUTURE <= 366:
+        raise ValueError("预测天数必须在 1 到 366 之间")
     bundle = joblib.load(MODEL_PATH)
     model, feats = bundle["model"], bundle["features"]
     t_max = bundle.get("t_max", 0)
@@ -116,6 +122,17 @@ def main():
     result.to_csv(OUT_CSV, index=False, encoding="utf-8-sig")
     print("-" * 60)
     print(f"预测结果已保存：{OUT_CSV}")
+    # Dates follow the source dataset, not the wall clock. Keep actual values and
+    # model estimates separate so the web chart cannot imply observed future data.
+    publish_forecast({
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "history_end": last_date.strftime("%Y-%m-%d"),
+        "history": [{"date": r["stat_date"].strftime("%Y-%m-%d"),
+                     "energy": float(r["total_kwh"]), "sessions": int(r["sessions"])}
+                    for _, r in hist.tail(14).iterrows()],
+        "forecast": [{"date": r["forecast_date"], "energy": r["pred_kwh"],
+                      "sessions": r["pred_sessions"]} for r in rows],
+    }, os.getenv("FORECAST_PATH", os.path.join(ROOT, "data", "processed", "forecast.json")))
 
 
 if __name__ == "__main__":

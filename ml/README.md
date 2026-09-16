@@ -1,7 +1,7 @@
 # ML 模块 —— 充电负荷预测（时间序列）
 
 基于历史充电数据预测**未来若干天的日充电量**，并给出辅助的订单数估算。
-本模块是数据仓库四层之上的应用：**读取 DWD 明细 → 生成日序列（DWS）→ 输出预测（ADS）→ 供后端 REST 与前端大屏使用**。
+本模块是数据仓库四层之上的应用：**读取 DWD 明细 → 生成日序列（DWS）→ 输出预测文件 → 供后端 REST 与前端大屏使用**。
 
 > 数据源：本模块读取仓库 Hive 表 `dws.daily_series`（由 `spark/pipeline.py` 从 `dwd.sessions`
 > 按天聚合产出，见 `ml/sql/00_build_timeseries.sql` 中的等价 SQL）。
@@ -31,9 +31,9 @@ ml/
 | ODS | 复用仓库现有 `ods.sessions` | 原始 CSV 入库，不重复建设 |
 | DWD | 复用仓库现有 `dwd.sessions` | 已清洗、已还原 `started` 时间戳的会话明细 |
 | DWS | **本模块的日粒度时间序列** | 按天聚合的电量/订单/活跃站点，作为预测输入 |
-| ADS | **预测结果表**（如 `ads.ml_forecast`）| 未来 N 天的预测值，供后端与前端读取 |
+| 应用输出 | `data/processed/forecast.json` | 原子替换的预测文件，供 REST 与大屏读取；不写入 Hive ADS 或 MySQL |
 
-即：ML 不新增 ODS/DWD，而是在现有 DWD 之上产出 **DWS 序列** 与 **ADS 预测**，与仓库分层保持一致。
+即：ML 不新增 ODS/DWD，而是在现有 DWD 之上产出 **DWS 序列** 与 **预测文件**，与仓库分层保持一致。
 
 ## 数据契约
 
@@ -59,7 +59,7 @@ ml/
 
 ### 输出
 
-预测结果（建议落地为 `ads.ml_forecast`）：
+CSV 预测结果（`ml/forecast_result.csv`）：
 
 | 字段 | 含义 |
 |------|------|
@@ -67,7 +67,7 @@ ml/
 | `pred_kwh` | 预测充电量（度）|
 | `pred_sessions` | 预测订单数（辅助，线性估算）|
 | `is_holiday` | 是否法定节假日 |
-| `generated_at` | 预测生成时间 |
+
 
 ## 建模方法
 
@@ -135,10 +135,28 @@ ml/venv/bin/python ml/experiment.py
    （`ml/sql/00_build_timeseries.sql` 为等价的 spark-sql 独立重建脚本，二选一执行）；
 2. ✅ `train.py` / `predict.py` 数据源已改为 `dws.daily_series`。
 
-待办：
+Web 集成已完成：
 
-3. 预测结果写入 ADS（如 `ads.ml_forecast`），并加入 `publish` 流程；
-4. 后端新增 `GET /api/ml/forecast`，返回“历史实际 + 未来预测”，供前端大屏绘图。
+3. `predict.py` 保留 CSV，并原子发布 `data/processed/forecast.json`；失败时保留上次完整文件。
+4. `GET /api/ml/forecast` 返回 `generated_at`、`history_end`、`history`（末尾 14 条实际日记录）和
+   `forecast`（未来 N 天）。两组记录均包含 `date`、`energy`、`sessions`；未生成结果时返回 503。
+5. Web 面板独立加载预测，跟随全局指标切换、刷新按钮和每分钟自动刷新；失败时保留旧预测并显示提示。
+   历史实际与预测使用不同曲线，不将预测计入历史 KPI。订单预测保留小数，属于辅助估算。
+
+### Docker Compose 中生成预测
+
+```sh
+# 构建包含 ML 依赖的后端并启用 ml 目录挂载
+docker compose up -d --build
+# 先完成数据流水线，再训练和预测；不可并发使用嵌入式 Hive catalog
+docker compose exec backend sh /workspace/scripts/run-pipeline.sh
+docker compose exec backend sh /workspace/scripts/run-forecast.sh 7
+```
+
+脚本使用 `/hadoop-data/metastore` 下的现有 Hive catalog；预测完成后刷新 Web 页面即可。
+API 与预测脚本默认共享 `data/processed/forecast.json`；自定义位置时须为两者设置相同的
+`FORECAST_PATH`。预测日期从数据末日开始，与运行时的当前日期无关。
+这条文件发布链路独立于 MySQL 分析快照，暂未实现 Hive ADS 预测表或 MySQL 预测发布。
 
 ## 已知限制
 

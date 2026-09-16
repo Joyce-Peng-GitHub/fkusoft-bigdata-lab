@@ -14,9 +14,9 @@ const { chromium } = require('playwright-core');
       await route.fulfill({ response, json: data });
     });
     await page.goto(process.env.BASE_URL || 'http://localhost:5173');
-    await page.locator('.chart').first().waitFor();
+    await page.locator('.charts .chart').first().waitFor();
     for (let index = 0; index < 13; index++) {
-      const chart = page.locator('.chart').nth(index);
+      const chart = page.locator('.charts .chart').nth(index);
       await chart.scrollIntoViewIfNeeded();
       await chart.evaluate(async element => {
         const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => /\/echarts\.js\?/.test(name));

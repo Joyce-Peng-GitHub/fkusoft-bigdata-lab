@@ -44,6 +44,7 @@ services:
       - hadoop-data:/hadoop-data
       - ./tests:/workspace/tests:ro
       - ./spark:/workspace/spark:ro
+      - ./ml:/workspace/ml
       - ./scripts:/workspace/scripts:ro
       - ./backend:/workspace/backend
       - ./data:/workspace/data

@@ -30,3 +30,19 @@ ODS / DWD / DWS / ADS 均通过 Spark Hive catalog 持久化；每次成功作�
 
 真实 Chromium / ECharts 提示曾复现 `123.99999999999993`。展示层格式化后，13 个图表的提示均显示舍入值（例如 `124`），不再泄露浮点尾差；TypeScript 和生产构建通过。子代理复核无可操作问题。
 使用与浏览器回归相同的 playwright-core / Chromium 环境执行 `node tests/precision-smoke.cjs`；该脚本面向 Vite 开发服务，通过实际加载的 ECharts 模块触发提示。
+
+## PR #6：机器学习预测接入 Web（2026-09-16）
+
+- 合并 `origin/main` 的面板调整；根目录 `README.md` 与 main 完全一致。
+- 独立 Compose 项目 `ml-forecast-pr6` 完成镜像构建、真实 Spark/Hive 流水线、
+  MySQL 发布、模型训练与 7 天递归预测。历史截至 **2015-10-04**，预测范围为
+  **2015-10-05 至 2015-10-11**；日期基于数据末日，不是当前日期。
+- 预测 JSON 原子发布到共享数据目录；浏览器经 Vite → Flask 读取，7 个电量点与模型输出逐项一致。
+- 容器中 `PYTHONPATH=/workspace/backend:/workspace/ml python -m unittest discover -s /workspace/tests -v`：
+  **6 项全部通过**，包含实际仓库对账、API 合约、原子替换失败保留旧结果和未就绪状态。
+- `npm run build`：TypeScript 与生产构建通过；保留现有 bundle 大小提示。
+- Chromium：`tests/forecast-browser.cjs` 使用确定性接口数据验证实际/预测边界、零值、
+  小数订单估算、指标切换、390px 布局、刷新失败保留旧结果、首次失败及恢复。
+  使用 Vite 开发服务运行，需安装 `playwright`，可设置 `BASE_URL` 与 `CHROMIUM_PATH`。
+- 真实服务上的 `tests/browser-smoke.cjs` 和 `tests/precision-smoke.cjs` 均通过，
+  原有 13 张分析图、指标切换、移动布局、失败处理和提示精度无回归。
