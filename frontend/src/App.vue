@@ -156,7 +156,7 @@ const battery = computed<EChartsOption>(() => ({ ...base,
     data: data.value?.battery.map(r => [r.soc_band, r.temperature, r.samples]) ?? [] }],
 }));
 const panels = computed(() => [
-  { title:'月度充电趋势', note:'2014.11 — 2015.10', option:trend.value },
+  { title:'月度充电趋势', option:trend.value },
   { title:'平台构成', option:platform.value },
   { title:'站点贡献 TOP 10', option:stations.value },
   { title:'星期 × 小时分布', option:heatmap.value },
