@@ -179,7 +179,7 @@ const visiblePanels = computed(() => {
 <template>
   <main>
     <header>
-      <div class="brand"><span class="brand-mark">ϟ</span><div><h1>电动汽车充电站监测</h1></div></div>
+      <div class="brand"><img class="brand-mark" src="/app-icon.png" alt="" aria-hidden="true"><div><h1>电动汽车充电站监测</h1></div></div>
       <div class="header-meta"><span class="live-dot" /> {{ data ? '分析数据已连接' : '等待数据连接' }}<br><small>HDFS · HIVE · SPARK · MYSQL</small></div>
     </header>
     <HeaderDecoration />
@@ -227,7 +227,7 @@ button, select { font: inherit; }
 main { width: min(100%, calc(100dvh * 16 / 7)); height: 100dvh; min-height: 700px; margin: auto; padding: 18px 24px 12px; display: flex; flex-direction: column; gap: 10px; }
 header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .brand { display: flex; align-items: center; gap: 14px; }
-.brand-mark { display: grid; place-items: center; width: 40px; height: 44px; color: var(--color-accent); font-size: 36px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-panel); box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
+.brand-mark { display: block; width: 44px; height: 44px; flex: 0 0 44px; object-fit: contain; }
 h1 { font-size: clamp(20px, 1.6vw, 30px); letter-spacing: 4px; margin: 0; }
 .header-meta { font-size: 12px; text-align: right; line-height: 1.7; color: var(--color-text-secondary); }
 .header-meta small { font-size: 9px; letter-spacing: 2px; color: var(--color-text-faint); }
