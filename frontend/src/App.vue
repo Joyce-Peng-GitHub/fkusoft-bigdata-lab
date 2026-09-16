@@ -127,24 +127,68 @@ const battery = computed<EChartsOption>(() => ({ ...base,
   series: [{ type: 'scatter', symbolSize: value => Math.max(10, Math.sqrt(Number(value[2]))*2),
     data: data.value?.battery.map(r => [r.soc_band, r.temperature, r.samples]) ?? [] }],
 }));
-const panels = computed(() => [
-  { title:'月度充电趋势', note:'2014.11 — 2015.10', option:trend.value },
-  { title:'平台构成', option:platform.value },
-  { title:'站点贡献 TOP 10', option:stations.value },
-  { title:'星期 × 小时分布', note:`交叉对比 01 · ${unit.value}`, option:heatmap.value, wide:true },
-  { title:'平台 × 设施类型', note:'交叉对比 02 · 分组柱状', option:comparison.value },
-  { title:'小时充电分布', note:'按订单开始时间', option:hourly.value },
-  { title:'每周充电节律', option:weekday.value },
-  { title:'设施类型构成', option:facility.value },
-  { title:'充电时长分布', note:'按订单时长分段', option:duration.value },
-  { title:'单次电量分布', note:'按订单电量分段', option:energy.value },
-  { title:'地点对比', note:'地点编号', option:location.value },
-  { title:'管理车辆标识', note:'0 / 1 为源数据标识', option:vehicle.value },
-  { title:'电池 SOC 与温度', note:'气泡大小为采样量 · 独立遥测统计', option:battery.value },
-]);
+// Keep navigation in the URL so a focused analysis can be bookmarked. Only the
+// active page mounts charts; leaving a page disposes its ECharts observers.
+const pages = [
+  { id: 'overview', title: '运营总览', description: '核心指标与月度趋势、站点贡献' },
+  { id: 'time', title: '时间规律', description: '从星期与小时发现充电高峰' },
+  { id: 'platform', title: '平台设施', description: '平台构成与设施类型交叉分析' },
+  { id: 'charging', title: '充电特征', description: '订单时长与单次充电量分布' },
+  { id: 'location', title: '地点车辆', description: '地点贡献与管理车辆标识' },
+  { id: 'battery', title: '电池遥测', description: '独立遥测数据中的 SOC 与温度关系' },
+  { id: 'forecast', title: '历史预测', description: '历史实际值与机器学习预测对比' },
+] as const;
+type PageId = typeof pages[number]['id'];
+const activePage = ref<PageId>('overview');
+function syncPage() {
+  activePage.value = pages.find(page => page.id === window.location.hash.slice(1))?.id ?? 'overview';
+}
+onMounted(() => { syncPage(); window.addEventListener('hashchange', syncPage); });
+onBeforeUnmount(() => window.removeEventListener('hashchange', syncPage));
+const currentPage = computed(() => pages.find(page => page.id === activePage.value)!);
+const panels = computed(() => {
+  const groups = {
+    overview: [
+      { title: '月度充电趋势', note: '2014.11 — 2015.10', option: trend.value },
+      { title: '站点贡献 TOP 10', option: stations.value },
+    ],
+    time: [
+      { title: '星期 × 小时分布', note: `交叉对比 · ${unit.value}`, option: heatmap.value },
+      { title: '小时充电分布', note: '按订单开始时间', option: hourly.value },
+      { title: '每周充电节律', option: weekday.value },
+    ],
+    platform: [
+      { title: '平台 × 设施类型', note: '交叉对比 · 分组柱状', option: comparison.value },
+      { title: '平台构成', option: platform.value },
+      { title: '设施类型构成', option: facility.value },
+    ],
+    charging: [
+      { title: '充电时长分布', note: '按订单时长分段', option: duration.value },
+      { title: '单次电量分布', note: '按订单电量分段', option: energy.value },
+    ],
+    location: [
+      { title: '地点对比', note: '地点编号', option: location.value },
+      { title: '管理车辆标识', note: '0 / 1 为源数据标识', option: vehicle.value },
+    ],
+    battery: [{ title: '电池 SOC 与温度', note: '气泡大小为采样量 · 独立遥测统计', option: battery.value }],
+    forecast: [],
+  };
+  return groups[activePage.value];
+});
 </script>
 
 <template>
+  <div class="dashboard-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">ϟ <span>充电数据中心</span></div>
+      <nav aria-label="分析页面">
+        <a v-for="(page, index) in pages" :key="page.id" :href="`#${page.id}`"
+          :aria-current="activePage === page.id ? 'page' : undefined">
+          <span class="nav-index">0{{ index + 1 }}</span>{{ page.title }}
+        </a>
+      </nav>
+      <p class="sidebar-note">多维充电分析<br>每 60 秒自动刷新</p>
+    </aside>
   <main>
     <header>
       <div class="brand"><span class="brand-mark">ϟ</span><div><h1>电动汽车充电站监测</h1></div></div>
@@ -157,9 +201,10 @@ const panels = computed(() => [
     </section>
     <p v-if="error" class="message error" role="alert">{{ error }} {{ data ? '当前保留上次成功获取的数据。' : '' }}</p>
     <p v-if="!data && !error" class="message" role="status">正在读取分析结果…</p>
-    <ForecastPanel :metric="metric" :refresh-key="refreshKey" />
-    <template v-if="data">
-      <section class="kpis" aria-label="核心指标">
+    <div class="page-heading"><h2>{{ currentPage.title }}</h2><p>{{ currentPage.description }}</p></div>
+    <ForecastPanel v-if="activePage === 'forecast'" :metric="metric" :refresh-key="refreshKey" />
+    <template v-if="data && activePage !== 'forecast'">
+      <section v-if="activePage === 'overview'" class="kpis" aria-label="核心指标">
         <article v-for="item in [
           ['充电订单',number(data.overview.sessions),'单'],
           ['累计充电量',number(data.overview.energy,2),'kWh'],
@@ -168,8 +213,8 @@ const panels = computed(() => [
           ['平均充电时长',number(data.overview.avg_duration,2),'小时'],
         ]" :key="item[0]"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong><small>{{ item[2] }}</small></article>
       </section>
-      <section class="charts" aria-label="多维分析图表">
-        <dv-border-box-12 v-for="panel in panels" :key="panel.title" class="panel" :class="{wide:panel.wide}" :color="['#20425e','#32cdb7']">
+      <section class="charts" :class="`charts-${panels.length}`" aria-label="多维分析图表">
+        <dv-border-box-12 v-for="panel in panels" :key="panel.title" class="panel" :color="['#20425e','#32cdb7']">
           <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" /></article>
         </dv-border-box-12>
       </section>
@@ -178,9 +223,21 @@ const panels = computed(() => [
       </footer>
     </template>
   </main>
+  </div>
 </template>
 
 <style>
 :root{font-family:Inter,"Microsoft YaHei",sans-serif;color:#dfedf7;background:#07111e;font-synthesis:none;color-scheme:dark}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 0,#14344b80,transparent 65%),#07111e}button,select{font:inherit}main{max-width:1920px;margin:auto;padding:26px 32px}header{display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{display:flex;align-items:center;gap:16px}.brand-mark{display:grid;place-items:center;width:48px;height:56px;color:#39e1bd;font-size:44px;border:1px solid #2a6972;border-radius:12px;background:#15343d}h1{font-size:27px;letter-spacing:4px;margin:0}.header-meta{font-size:13px;text-align:right;line-height:1.9;color:#a6c5d3}.header-meta small{font-size:9px;letter-spacing:2px;color:#54788e}.live-dot{display:inline-block;width:7px;height:7px;background:#36dfb7;border-radius:50%;box-shadow:0 0 10px #36dfb7;margin-right:5px}.toolbar{display:flex;justify-content:space-between;align-items:center;margin:10px 0 22px;gap:12px}.toolbar p{font-size:14px}.toolbar span{font-size:11px;color:#7395aa;margin-left:8px}.toolbar label{font-size:12px;color:#87a8be}select,button{background:#122b40;border:1px solid #2b4b62;border-radius:5px;padding:8px 12px;color:#d2eaf5;font-size:12px}button{margin-left:10px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}.kpis article{padding:20px 22px;background:linear-gradient(115deg,#17374a90,#0c203580);border:1px solid #244256;border-top:2px solid #33c7b5;border-radius:5px}.kpis span{display:block;color:#8cabbf;font-size:12px}.kpis strong{display:block;font-size:32px;color:#ddf9f3;letter-spacing:1px;margin:9px 0 3px;font-variant-numeric:tabular-nums}.kpis small{color:#558ca3;font-size:10px}.charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.panel{min-width:0;background:#0c1c2d88;min-height:332px}.panel.wide{grid-column:span 2}.panel article{padding:20px 18px 12px}h2{font-size:14px;letter-spacing:1px;margin:0;border-left:3px solid #36d5bf;padding-left:9px}.panel-note{color:#597e97;font-size:10px;margin:7px 0 0 12px}footer{font-size:11px;color:#83a2b6;border-top:1px solid #1a3448;padding:22px 0 0;margin-top:24px;line-height:1.8}footer strong{color:#39c4ad}.message{padding:24px;border:1px solid #27475e;text-align:center}.error{color:#ffbc88;border-color:#81553b}select:focus-visible,button:focus-visible{outline:2px solid #31e6c5;outline-offset:3px}@media(min-width:1600px){.chart{height:290px!important}}@media(max-width:1000px){.charts{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis{grid-template-columns:repeat(3,1fr)}.toolbar{align-items:flex-start;flex-direction:column}h1{font-size:22px}}@media(max-width:620px){main{padding:18px 12px}.header-meta{display:none}h1{font-size:19px;letter-spacing:1px}.kpis{grid-template-columns:repeat(2,1fr);gap:10px}.kpis article{padding:14px}.kpis strong{font-size:25px}.charts{grid-template-columns:1fr}.panel.wide{grid-column:auto}.toolbar span{display:block;margin:6px 0 0}}
+
+.dashboard-shell{display:grid;grid-template-columns:184px minmax(0,1fr);min-height:100dvh}
+.sidebar{padding:28px 14px;background:#091827;border-right:1px solid #20425e}
+.sidebar-brand{display:flex;align-items:center;gap:10px;color:#31e6c5;font-size:30px;padding:0 10px 28px}
+.sidebar-brand span{font-size:15px;font-weight:700;color:#dfedf7}
+.sidebar nav{display:grid;gap:8px}.sidebar a{display:flex;align-items:center;gap:12px;padding:14px 12px;border:1px solid transparent;border-radius:6px;color:#8cabbf;text-decoration:none;font-size:14px}
+.sidebar a:hover{background:#122b40}.sidebar a[aria-current=page]{color:#dcfff7;background:#153b44;border-color:#287568}.nav-index{font-size:10px;color:#558ca3}.sidebar-note{font-size:11px;color:#7395aa;line-height:2;padding:24px 10px}
+main{width:100%;min-width:0}.page-heading{margin-bottom:16px;display:flex;align-items:center;gap:18px}.page-heading p{font-size:12px;color:#7395aa;margin:0}
+.charts-1{grid-template-columns:minmax(0,1fr)}.charts-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+a:focus-visible{outline:2px solid #31e6c5;outline-offset:3px}
+@media(max-width:620px){.dashboard-shell{grid-template-columns:120px minmax(0,1fr)}.sidebar{padding:18px 6px}.sidebar-brand{padding:0 5px 20px}.sidebar-brand span{font-size:12px}.sidebar a{padding:12px 6px;gap:6px;font-size:12px}.page-heading{align-items:flex-start;flex-direction:column;gap:8px}.charts{grid-template-columns:minmax(0,1fr)}}
 </style>
