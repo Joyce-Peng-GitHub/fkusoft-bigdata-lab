@@ -20,8 +20,9 @@ ml/
 ├── experiment.py              # 模型选型实验（滚动前推验证）
 ├── train.py                   # 训练 + 评估 + 保存模型
 ├── predict.py                 # 未来 N 天递归预测
+├── export.py                  # 把预测快照原子发布到 MySQL forecast_snapshot
 ├── model_forecast.pkl         # 训练产物（运行 train.py 生成，不纳入版本管理）
-└── forecast_result.csv        # 预测产物（运行 predict.py 生成，不纳入版本管理）
+└── forecast_result.csv        # 预测产物的 CSV 副本（运行 predict.py 生成，不纳入版本管理）
 ```
 
 ## 在四层架构中的位置
@@ -31,7 +32,7 @@ ml/
 | ODS | 复用仓库现有 `ods.sessions` | 原始 CSV 入库，不重复建设 |
 | DWD | 复用仓库现有 `dwd.sessions` | 已清洗、已还原 `started` 时间戳的会话明细 |
 | DWS | **本模块的日粒度时间序列** | 按天聚合的电量/订单/活跃站点，作为预测输入 |
-| 应用输出 | `data/processed/forecast.json` | 原子替换的预测文件，供 REST 与大屏读取；不写入 Hive ADS 或 MySQL |
+| 应用输出 | MySQL `forecast_snapshot` | 单行 JSON 快照，供 REST 与大屏读取；与 `dashboard_snapshot` 同库、同一原子发布模式，不写 Hive ADS |
 
 即：ML 不新增 ODS/DWD，而是在现有 DWD 之上产出 **DWS 序列** 与 **预测文件**，与仓库分层保持一致。
 
@@ -67,6 +68,9 @@ CSV 预测结果（`ml/forecast_result.csv`）：
 | `pred_kwh` | 预测充电量（度）|
 | `pred_sessions` | 预测订单数（辅助，线性估算）|
 | `is_holiday` | 是否法定节假日 |
+
+同一份预测还作为完整 API 契约原子写入 MySQL `forecast_snapshot`（`id=1` 单行 JSON），
+CSV 只是便于人工查看的副本；API 与大屏读取的是数据库快照。
 
 
 ## 建模方法
@@ -117,7 +121,7 @@ export SPARK_HOME=/opt/module/spark-3.4.1
 export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.9.7-src.zip
 ml/venv/bin/python ml/train.py
 
-# 3) 预测未来 7 天（生成 ml/forecast_result.csv）
+# 3) 预测未来 7 天（生成 ml/forecast_result.csv，并发布 MySQL forecast_snapshot）
 ml/venv/bin/python ml/predict.py 7
 
 # 可选：复现模型选型实验
@@ -137,9 +141,11 @@ ml/venv/bin/python ml/experiment.py
 
 Web 集成已完成：
 
-3. `predict.py` 保留 CSV，并原子发布 `data/processed/forecast.json`；失败时保留上次完整文件。
-4. `GET /api/ml/forecast` 返回 `generated_at`、`history_end`、`history`（末尾 14 条实际日记录）和
-   `forecast`（未来 N 天）。两组记录均包含 `date`、`energy`、`sessions`；未生成结果时返回 503。
+3. `predict.py` 保留 CSV，并通过 `export.publish_forecast` 原子写入 MySQL `forecast_snapshot`
+   （单行事务，失败时保留上次完整快照）；连接参数复用 `backend/db.py` 的 `MYSQL_*` 环境变量。
+4. `GET /api/ml/forecast` 从 MySQL 读取快照并返回 `generated_at`、`history_end`、`history`
+   （末尾 14 条实际日记录）和 `forecast`（未来 N 天）。两组记录均包含 `date`、`energy`、`sessions`；
+   未生成结果或数据库不可用时返回 503。
 5. Web 面板独立加载预测，跟随全局指标切换、刷新按钮和每分钟自动刷新；失败时保留旧预测并显示提示。
    历史实际与预测使用不同曲线，不将预测计入历史 KPI。订单预测保留小数，属于辅助估算。
 
@@ -154,9 +160,11 @@ docker compose exec backend sh /workspace/scripts/run-forecast.sh 7
 ```
 
 脚本使用 `/hadoop-data/metastore` 下的现有 Hive catalog；预测完成后刷新 Web 页面即可。
-API 与预测脚本默认共享 `data/processed/forecast.json`；自定义位置时须为两者设置相同的
-`FORECAST_PATH`。预测日期从数据末日开始，与运行时的当前日期无关。
-这条文件发布链路独立于 MySQL 分析快照，暂未实现 Hive ADS 预测表或 MySQL 预测发布。
+预测快照写入 MySQL `forecast_snapshot`，与后端共用 `MYSQL_HOST` / `MYSQL_PORT` /
+`MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD`，不需要额外的文件路径配置。
+预测日期从数据末日开始，与运行时的当前日期无关。
+该链路与分析快照共用 MySQL，但仍是独立表与独立事务：预测任务或数据库故障只影响预测面板，
+不影响 `dashboard_snapshot`；暂未实现 Hive ADS 预测表。
 
 ## 已知限制
 

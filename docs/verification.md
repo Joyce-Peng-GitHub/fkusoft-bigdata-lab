@@ -47,6 +47,18 @@ ODS / DWD / DWS / ADS 均通过 Spark Hive catalog 持久化；每次成功作�
 - 真实服务上的 `tests/browser-smoke.cjs` 和 `tests/precision-smoke.cjs` 均通过，
   原有 13 张分析图、指标切换、移动布局、失败处理和提示精度无回归。
 
+## ML 预测改为 MySQL 发布（2026-09-16，分支 `feat/ml-forecast-mysql`）
+
+- 预测产物从共享文件 `data/processed/forecast.json` 改为 MySQL `forecast_snapshot` 单行 JSON 快照：
+  `ml/export.py` 复用 `backend/db.py` 的 `MYSQL_*` 连接设置做单行事务发布，
+  `GET /api/ml/forecast` 改为查询该表，删除 `FORECAST_PATH` 文件读取分支。
+- `ml/predict.py` 仍输出 `ml/forecast_result.csv` 作为人工查看副本；`ml/requirements.txt` 增加
+  `mysql-connector-python`。
+- 本机（`node100`，非 Docker）执行 `PYTHONPATH=backend:ml python3 -m unittest discover -s tests -v`：
+  共 6 项，其中 1 项依赖流水线产物的对账用例按设计跳过，其余全部通过。覆盖快照表 DDL、
+  提交负载、结构与 NaN 校验、提交失败上抛、接口 200/503 及敏感错误隐藏。
+- 未在本机重跑完整 Spark/Hive/Docker 链路；Dockerfile 与 Compose 未改动，仅发布与读取通道变化。
+
 ### Forecast panel presentation update
 
 The panel is now titled “历史与预测”. The metadata and explanatory paragraphs
