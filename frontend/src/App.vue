@@ -4,6 +4,7 @@ import axios from 'axios';
 import type { EChartsOption } from 'echarts';
 import Chart from './components/Chart.vue';
 import HeaderDecoration from './components/HeaderDecoration.vue';
+import ForecastPanel from './components/ForecastPanel.vue';
 
 type Row = Record<string, string | number>;
 interface Dashboard {
@@ -15,6 +16,7 @@ interface Dashboard {
 }
 const data = ref<Dashboard>();
 const loading = ref(false);
+const refreshKey = ref(0);
 const error = ref('');
 const metric = ref<'energy' | 'sessions'>('energy');
 const unit = computed(() => metric.value === 'energy' ? 'kWh' : '单');
@@ -23,6 +25,7 @@ let controller: AbortController | undefined;
 async function refresh() {
   if (loading.value) return;
   loading.value = true;
+  refreshKey.value += 1;
   error.value = '';
   controller = new AbortController();
   try {
@@ -154,6 +157,7 @@ const panels = computed(() => [
     </section>
     <p v-if="error" class="message error" role="alert">{{ error }} {{ data ? '当前保留上次成功获取的数据。' : '' }}</p>
     <p v-if="!data && !error" class="message" role="status">正在读取分析结果…</p>
+    <ForecastPanel :metric="metric" :refresh-key="refreshKey" />
     <template v-if="data">
       <section class="kpis" aria-label="核心指标">
         <article v-for="item in [

@@ -86,6 +86,13 @@ def main():
       try_cast(`max_cell_voltage (V)` AS DOUBLE)-try_cast(`min_cell_voltage (V)` AS DOUBLE) voltage_spread
       FROM ods.battery""")
     battery.filter('session_id IS NOT NULL AND soc BETWEEN 0 AND 100 AND temperature BETWEEN -50 AND 100 AND voltage_spread BETWEEN 0 AND 5').write.mode('overwrite').saveAsTable('dwd.battery')
+    # Daily-grain load series feeds the ml forecast module. `started` already carries the
+    # corrected 2014/2015 calendar date, so one pass over dwd.sessions is enough; the row
+    # count must equal the DWD session total to stay reconciled with the dashboard.
+    spark.sql("""SELECT to_date(started) AS stat_date,
+      COUNT(*) AS sessions, SUM(energy) AS total_kwh, SUM(fees) AS total_fee,
+      COUNT(DISTINCT station) AS active_stations
+      FROM dwd.sessions GROUP BY to_date(started)""").write.mode('overwrite').saveAsTable('dws.daily_series')
     df = spark.table('dwd.sessions')
     total = df.count()
     dimensions = {}

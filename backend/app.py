@@ -1,5 +1,7 @@
-"""Flask REST API serving the last successfully published MySQL ADS snapshot."""
+"""Serve the published MySQL analytics snapshot and atomic ML forecast artifact."""
 import json
+import os
+from pathlib import Path
 
 import mysql.connector
 from flask import Flask, jsonify
@@ -75,3 +77,22 @@ def analysis(dimension):
     if dimension not in data['dimensions']:
         return jsonify(error='未知分析维度'), 404
     return jsonify(dimension=dimension, rows=data['dimensions'][dimension])
+
+
+@app.get('/api/ml/forecast')
+def forecast():
+    """Serve the last complete forecast without requiring MySQL availability.
+
+    Returns:
+        Response | tuple: Actual history and future estimates, or a retryable 503
+        before prediction has run or when its shared artifact cannot be read.
+    """
+    path = Path(os.getenv('FORECAST_PATH', str(
+        Path(__file__).resolve().parents[1] / 'data/processed/forecast.json')))
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return jsonify(error='预测结果尚未就绪，请先运行预测任务'), 503
+    response = jsonify(payload)
+    response.headers['Cache-Control'] = 'no-store'
+    return response

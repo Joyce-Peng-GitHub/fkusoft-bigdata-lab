@@ -1,0 +1,5 @@
+# ML module generated artifacts and local environment
+venv/
+__pycache__/
+*.pkl
+forecast_result.csv
