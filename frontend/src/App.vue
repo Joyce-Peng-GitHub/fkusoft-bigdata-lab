@@ -50,12 +50,15 @@ const metricNumber = (value: unknown) => number(Number(value), metric.value === 
 const metricTooltip = (value: unknown) => `${metricNumber(value)} ${unit.value}`;
 const axisNumber = (value: number) => number(value, 2);
 const rows = (key: string) => data.value?.dimensions[key] ?? [];
+const tooltipStyle = {
+  backgroundColor: COLORS.panelSolid,
+  borderColor: COLORS.borderStrong,
+  textStyle: { color: COLORS.textPrimary },
+};
 const base: EChartsOption = {
   color: [...PALETTE], backgroundColor: COLORS.transparent,
   textStyle: { color: COLORS.textSecondary, fontFamily: FONT_STACK },
-  tooltip: { trigger: 'axis', valueFormatter: metricTooltip,
-    backgroundColor: COLORS.panelSolid, borderColor: COLORS.borderStrong,
-    textStyle: { color: COLORS.textPrimary } },
+  tooltip: { ...tooltipStyle, trigger: 'axis', valueFormatter: metricTooltip },
   grid: { left: 55, right: 32, top: 30, bottom: 32 },
 };
 function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): EChartsOption {
@@ -72,9 +75,7 @@ function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): ECh
   };
 }
 function donut(key: string, field: string): EChartsOption {
-  return { ...base, tooltip: { trigger: 'item', valueFormatter: metricTooltip,
-      backgroundColor: COLORS.panelSolid, borderColor: COLORS.borderStrong,
-      textStyle: { color: COLORS.textPrimary } },
+  return { ...base, tooltip: { ...tooltipStyle, trigger: 'item', valueFormatter: metricTooltip },
     legend: { bottom: 0, textStyle: { color: COLORS.textSecondary } },
     series: [{ type: 'pie', radius: ['43%', '68%'], center: ['50%', '44%'],
       itemStyle: { borderColor: COLORS.panelSolid, borderWidth: 2, borderRadius: 5 },
@@ -123,7 +124,7 @@ const comparison = computed<EChartsOption>(() => {
 const heatmap = computed<EChartsOption>(() => {
   const values = rows('weekday_hour');
   return { ...base, grid: { left: 40, right: 15, top: 16, bottom: 66 },
-    tooltip: { position: 'top', formatter: params => {
+    tooltip: { ...tooltipStyle, position: 'top', formatter: params => {
       const item = Array.isArray(params) ? params[0]! : params;
       const [hour, day, value] = item.value as number[];
       return `周${['一','二','三','四','五','六','日'][day!]} ${hour}时<br/>${metricTooltip(value)}`;
@@ -140,7 +141,7 @@ const heatmap = computed<EChartsOption>(() => {
   };
 });
 const battery = computed<EChartsOption>(() => ({ ...base,
-  tooltip: { trigger: 'item', formatter: params => {
+  tooltip: { ...tooltipStyle, trigger: 'item', formatter: params => {
     const item = Array.isArray(params) ? params[0]! : params;
     const [soc, temperature, samples] = item.value as number[];
     return `SOC 分段下界：${number(soc!)}%<br/>平均最高温度：${number(temperature!, 2)} ℃<br/>采样量：${number(samples!)} 条`;
@@ -227,20 +228,23 @@ button, select { font: inherit; }
 main { width: min(100%, calc(100dvh * 16 / 7)); height: 100dvh; min-height: 700px; margin: auto; padding: 18px 24px 12px; display: flex; flex-direction: column; gap: 10px; }
 header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .brand { display: flex; align-items: center; gap: 14px; }
-.brand-mark { display: grid; place-items: center; width: 40px; height: 44px; color: var(--color-accent); font-size: 36px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-panel); }
+.brand-mark { display: grid; place-items: center; width: 40px; height: 44px; color: var(--color-accent); font-size: 36px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-panel); box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
 h1 { font-size: clamp(20px, 1.6vw, 30px); letter-spacing: 4px; margin: 0; }
 .header-meta { font-size: 12px; text-align: right; line-height: 1.7; color: var(--color-text-secondary); }
 .header-meta small { font-size: 9px; letter-spacing: 2px; color: var(--color-text-faint); }
-.live-dot { display: inline-block; width: 7px; height: 7px; background: var(--color-accent); border-radius: 50%; box-shadow: 0 0 10px var(--color-accent-glow); margin-right: 5px; }
+.live-dot { display: inline-block; width: 7px; height: 7px; background: var(--color-accent); border-radius: 50%; box-shadow: 0 0 10px var(--color-accent-glow); margin-right: 5px; animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
 .header-decoration { height: 14px !important; flex: 0 0 14px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .toolbar p { margin: 0; font-size: 11px; color: var(--color-text-muted); }
 .toolbar label { font-size: 12px; color: var(--color-text-muted); }
-select, button { background: var(--color-control); border: 1px solid var(--color-border-strong); border-radius: 5px; padding: 6px 12px; color: var(--color-text-primary); font-size: 12px; }
+select, button { background: var(--color-control); border: 1px solid var(--color-border-strong); border-radius: 5px; padding: 6px 12px; color: var(--color-text-primary); font-size: 12px; accent-color: var(--color-accent); transition: border-color .15s ease, box-shadow .15s ease; }
 button { margin-left: 10px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--color-accent); box-shadow: 0 0 12px var(--color-accent-dim); }
+button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: .5; cursor: wait; }
 .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-.kpis article { min-width: 0; padding: 12px 16px; background: linear-gradient(115deg, var(--color-accent-dim), var(--color-panel)); border: 1px solid var(--color-border-panel); border-top: 2px solid var(--color-accent); border-radius: 5px; }
+.kpis article { min-width: 0; padding: 12px 16px; background: linear-gradient(115deg, var(--color-accent-dim), var(--color-panel)); border: 1px solid var(--color-border-panel); border-top: 2px solid var(--color-accent); border-radius: 5px; box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
 .kpis span { display: block; color: var(--color-text-muted); font-size: 12px; }
 .kpis strong { display: block; font-size: clamp(20px, 1.7vw, 34px); color: var(--color-text-primary); margin: 5px 0 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kpis small { color: var(--color-text-faint); font-size: 10px; }
@@ -256,7 +260,7 @@ button:disabled { opacity: .5; cursor: wait; }
 .overview [data-panel="站点贡献 TOP 10"] { grid-area: stations; }
 .overview [data-panel="小时充电分布"] { grid-area: hourly; }
 .overview [data-panel="星期 × 小时分布"] { grid-area: heatmap; }
-.panel { min-width: 0; min-height: 0; background: var(--color-panel); }
+.panel { min-width: 0; min-height: 0; background: var(--color-panel); box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
 .panel article { height: 100%; min-height: 0; padding: 14px 12px 8px; display: flex; flex-direction: column; }
 h2 { flex-shrink: 0; font-size: 14px; letter-spacing: 1px; margin: 0; border-left: 3px solid var(--color-accent); padding-left: 9px; }
 .panel-note { flex-shrink: 0; color: var(--color-text-faint); font-size: 10px; margin: 5px 0 0 12px; }
@@ -267,6 +271,10 @@ footer strong { color: var(--color-accent); }
 .charts.without-data { grid-template-areas: none; grid-template-columns: 1fr; grid-template-rows: 1fr; }
 .without-data .forecast-panel { grid-area: auto; }
 select:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+  select, button { transition: none; }
+}
 @media (max-width: 1100px), (max-height: 699px) {
   main { width: 100%; height: auto; min-height: 100dvh; }
   .charts, .charts.overview { flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: 300px; grid-template-areas: none; }

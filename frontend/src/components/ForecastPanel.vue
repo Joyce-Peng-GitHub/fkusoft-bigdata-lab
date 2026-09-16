@@ -68,7 +68,7 @@ const option = computed<EChartsOption>(() => {
 </template>
 
 <style scoped>
-.forecast-panel{display:flex;flex-direction:column;min-height:0;padding:14px 12px 8px;background:var(--color-panel);border:1px solid var(--color-border-panel);background-image:linear-gradient(135deg,var(--color-accent-dim),var(--color-transparent));border-radius:6px;min-width:0}
+.forecast-panel{display:flex;flex-direction:column;min-height:0;padding:14px 12px 8px;background:var(--color-panel);border:1px solid var(--color-border-panel);background-image:linear-gradient(135deg,var(--color-accent-dim),var(--color-transparent));border-radius:6px;min-width:0;box-shadow:inset 0 1px 0 var(--color-panel-sheen)}
 p{font-size:12px;color:var(--color-text-secondary);line-height:1.7}
 p[role=alert]{color:var(--color-error)}
 </style>
