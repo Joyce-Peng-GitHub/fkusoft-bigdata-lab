@@ -159,16 +159,16 @@ const panels = computed(() => [
   { title:'月度充电趋势', note:'2014.11 — 2015.10', option:trend.value },
   { title:'平台构成', option:platform.value },
   { title:'站点贡献 TOP 10', option:stations.value },
-  { title:'星期 × 小时分布', note:`交叉对比 01 · ${unit.value}`, option:heatmap.value },
-  { title:'平台 × 设施类型', note:'交叉对比 02 · 分组柱状', option:comparison.value },
+  { title:'星期 × 小时分布', option:heatmap.value },
+  { title:'平台 × 设施类型', option:comparison.value },
   { title:'小时充电分布', note:'按订单开始时间', option:hourly.value },
   { title:'每周充电节律', option:weekday.value },
   { title:'设施类型构成', option:facility.value },
-  { title:'充电时长分布', note:'按订单时长分段', option:duration.value },
-  { title:'单次电量分布', note:'按订单电量分段', option:energy.value },
+  { title:'充电时长分布', option:duration.value },
+  { title:'单次电量分布', option:energy.value },
   { title:'地点对比', note:'地点编号', option:location.value },
-  { title:'管理车辆标识', note:'0 / 1 为源数据标识', option:vehicle.value },
-  { title:'电池 SOC 与温度', note:'气泡大小为采样量 · 独立遥测统计', option:battery.value },
+  { title:'管理车辆标识', option:vehicle.value },
+  { title:'电池 SOC 与温度', note:'气泡大小标示样本数量', option:battery.value },
 ]);
 const visiblePanels = computed(() => {
   const titles = views.find(view => view.id === activeView.value)!.titles;
@@ -201,7 +201,6 @@ const visiblePanels = computed(() => {
       </section>
       <nav class="view-tabs" aria-label="分析专题">
         <button v-for="view in views" :key="view.id" :aria-pressed="activeView === view.id" @click="activeView = view.id">{{ view.label }}</button>
-        <span>郑州充电能源分析 · {{ activeView === 'overview' ? '运行态势与预测' : '多维专题分析' }}</span>
       </nav>
     </template>
     <section class="charts" :class="[activeView, { 'without-data': !data }]" aria-label="多维分析图表">

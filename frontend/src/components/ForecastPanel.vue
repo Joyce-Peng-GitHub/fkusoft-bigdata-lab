@@ -9,7 +9,6 @@ interface Point { date: string; energy: number; sessions: number }
 interface Forecast { generated_at: string; history_end: string; history: Point[]; forecast: Point[] }
 const props = defineProps<{ metric: 'energy' | 'sessions'; refreshKey: number }>();
 const data = ref<Forecast>();
-const error = ref('');
 const loading = ref(false);
 let controller: AbortController | undefined;
 // Forecast readiness is independent of analytics readiness. Keep the last good
@@ -19,13 +18,12 @@ watch(() => props.refreshKey, async () => {
   const request = new AbortController();
   controller = request;
   loading.value = true;
-  error.value = '';
   try {
     data.value = (await axios.get<Forecast>('/api/ml/forecast', {
       timeout: 15000, signal: request.signal,
     })).data;
-  } catch (cause) {
-    if (!axios.isCancel(cause)) error.value = '暂时无法获取预测结果，请确认预测任务已完成后刷新。';
+  } catch {
+    // A failed refresh leaves the last successful forecast visible.
   } finally {
     if (controller === request) loading.value = false;
   }
@@ -61,8 +59,7 @@ const option = computed<EChartsOption>(() => {
 <template>
   <section class="forecast-panel" aria-label="历史与预测">
     <h2>历史与预测</h2>
-    <p v-if="error" role="alert">{{ error }} {{ data ? '当前保留上次成功获取的预测结果。' : '' }}</p>
-    <p v-else-if="loading && !data" role="status">预测结果加载中…</p>
+    <p v-if="loading && !data" role="status">预测结果加载中…</p>
     <Chart v-if="data" :option="option" label="历史实际与机器学习预测" />
   </section>
 </template>
@@ -70,5 +67,4 @@ const option = computed<EChartsOption>(() => {
 <style scoped>
 .forecast-panel{display:flex;flex-direction:column;min-height:0;padding:14px 12px 8px;background:var(--color-panel);border:1px solid var(--color-border-panel);background-image:linear-gradient(135deg,var(--color-accent-dim),var(--color-transparent));border-radius:6px;min-width:0;box-shadow:inset 0 1px 0 var(--color-panel-sheen)}
 p{font-size:12px;color:var(--color-text-secondary);line-height:1.7}
-p[role=alert]{color:var(--color-error)}
 </style>
