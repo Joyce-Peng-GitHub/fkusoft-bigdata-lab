@@ -43,26 +43,23 @@ const option = computed<EChartsOption>(() => {
     grid: { left: 65, right: 24, top: 60, bottom: 40 },
     xAxis: { type: 'category', data: [...history, ...future].map(row => row.date), axisLabel: { hideOverlap: true } },
     yAxis: { type: 'value', name: unit.value, splitLine: { lineStyle: { color: '#163349' } } },
-    // Nulls preserve the actual/forecast boundary, including zero-valued results.
+    // Anchor the dashed forecast at the last actual value to connect the two
+    // periods. Earlier historical points remain absent from the forecast series.
     series: [
       { name: '历史实际', type: 'line', data: [...history.map(row => row[props.metric]), ...future.map(() => null)] },
       { name: '模型预测', type: 'line', lineStyle: { type: 'dashed' },
-        data: [...history.map(() => null), ...future.map(row => row[props.metric])] },
+        data: [...history.map((row, index) => index === history.length - 1 ? row[props.metric] : null), ...future.map(row => row[props.metric])] },
     ],
   };
 });
 </script>
 
 <template>
-  <section class="forecast-panel" aria-label="机器学习预测">
-    <h2>机器学习负荷预测</h2>
+  <section class="forecast-panel" aria-label="历史与预测">
+    <h2>历史与预测</h2>
     <p v-if="error" role="alert">{{ error }} {{ data ? '当前保留上次成功获取的预测结果。' : '' }}</p>
     <p v-else-if="loading && !data" role="status">预测结果加载中…</p>
-    <template v-if="data">
-      <p>历史截至 {{ data.history_end }} · 预测 {{ data.forecast.length }} 天 · 生成于 {{ new Date(data.generated_at).toLocaleString('zh-CN') }}</p>
-      <p>预测日期基于历史数据末日，不代表当前日期后的负荷。{{ metric === 'sessions' ? '订单数为线性辅助估算。' : '充电量为模型估算值。' }}</p>
-      <Chart :option="option" label="历史实际与机器学习预测" />
-    </template>
+    <Chart v-if="data" :option="option" label="历史实际与机器学习预测" />
   </section>
 </template>
 

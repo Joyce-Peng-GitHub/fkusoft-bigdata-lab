@@ -32,10 +32,11 @@ const { chromium } = require('playwright');
       }),
     }));
     await page.goto(process.env.BASE_URL || 'http://127.0.0.1:5173');
-    const panel = page.getByRole('region', { name: '机器学习预测', exact: true });
+    const panel = page.getByRole('region', { name: '历史与预测', exact: true });
     await panel.locator('canvas').first().waitFor();
-    assert.match(await panel.innerText(), /历史截至 2015-10-31 · 预测 2 天/);
-    // Inspect the actual ECharts instance to verify values, units and null boundary.
+    await panel.getByRole('heading', { name: '历史与预测', exact: true }).waitFor();
+    assert.equal(await panel.locator('p').count(), 0);
+    // Inspect the actual ECharts instance to verify values, units and the dashed bridge.
     async function chartOption() {
       return page.evaluate(async () => {
         const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => /\/echarts\.js\?/.test(name));
@@ -45,12 +46,13 @@ const { chromium } = require('playwright');
     }
     let option = await chartOption();
     assert.deepEqual(option.series[0].data, [5, 10, null, null]);
-    assert.deepEqual(option.series[1].data, [null, null, 0, 12.3]);
+    assert.deepEqual(option.series[1].data, [null, 10, 0, 12.3]);
+    assert.equal(option.series[1].lineStyle.type, 'dashed');
     await page.getByLabel('分析指标').selectOption('sessions');
-    await panel.getByText(/订单数为线性辅助估算/).waitFor();
+    await page.getByText('交叉对比 01 · 单', { exact: true }).waitFor();
     option = await chartOption();
     assert.equal(option.yAxis[0].name, '单');
-    assert.deepEqual(option.series[1].data, [null, null, 1.2, 2.4]);
+    assert.deepEqual(option.series[1].data, [null, 2, 1.2, 2.4]);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth);
     failed = true;

@@ -46,3 +46,11 @@ ODS / DWD / DWS / ADS 均通过 Spark Hive catalog 持久化；每次成功作�
   使用 Vite 开发服务运行，需安装 `playwright`，可设置 `BASE_URL` 与 `CHROMIUM_PATH`。
 - 真实服务上的 `tests/browser-smoke.cjs` 和 `tests/precision-smoke.cjs` 均通过，
   原有 13 张分析图、指标切换、移动布局、失败处理和提示精度无回归。
+
+### Forecast panel presentation update
+
+The panel is now titled “历史与预测”. The metadata and explanatory paragraphs
+have been removed. The dashed prediction series starts at the final historical
+value, connecting it to the first forecast point for both energy and sessions.
+TypeScript checks, the production build, and the updated forecast browser
+regression passed, including the title, removed paragraphs and dashed connection.
