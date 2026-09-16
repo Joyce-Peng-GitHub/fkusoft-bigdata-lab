@@ -1,7 +1,7 @@
 # ML 模块 —— 充电负荷预测（时间序列）
 
 基于历史充电数据预测**未来若干天的日充电量**，并给出辅助的订单数估算。
-本模块是数据仓库四层之上的应用：**读取 DWD 明细 → 生成日序列（DWS）→ 输出预测文件 → 供后端 REST 与前端大屏使用**。
+本模块是数据仓库四层之上的应用：**读取 DWD 明细 → 生成日序列（DWS）→ 发布 MySQL 预测快照 → 供后端 REST 与前端大屏使用**。
 
 > 数据源：本模块读取仓库 Hive 表 `dws.daily_series`（由 `spark/pipeline.py` 从 `dwd.sessions`
 > 按天聚合产出，见 `ml/sql/00_build_timeseries.sql` 中的等价 SQL）。
@@ -13,7 +13,7 @@
 ```
 ml/
 ├── README.md                  # 本文档
-├── requirements.txt           # Python 依赖（pandas / scikit-learn / chinesecalendar）
+├── requirements.txt           # Python 依赖（含建模、节假日及 MySQL Connector）
 ├── sql/
 │   └── 00_build_timeseries.sql# 从明细聚合出“日期 × 电量”日粒度时间序列
 ├── holidays.py                # 节假日/休息日（chinesecalendar，含调休）
@@ -34,7 +34,8 @@ ml/
 | DWS | **本模块的日粒度时间序列** | 按天聚合的电量/订单/活跃站点，作为预测输入 |
 | 应用输出 | MySQL `forecast_snapshot` | 单行 JSON 快照，供 REST 与大屏读取；与 `dashboard_snapshot` 同库、同一原子发布模式，不写 Hive ADS |
 
-即：ML 不新增 ODS/DWD，而是在现有 DWD 之上产出 **DWS 序列** 与 **预测文件**，与仓库分层保持一致。
+即：ML 不新增 ODS/DWD，而是在现有 DWD 之上产出 **DWS 序列** 与 **MySQL 预测快照**，
+并保留一份仅供人工查看的 CSV，与仓库分层保持一致。
 
 ## 数据契约
 
@@ -157,6 +158,16 @@ docker compose up -d --build
 # 先完成数据流水线，再训练和预测；不可并发使用嵌入式 Hive catalog
 docker compose exec backend sh /workspace/scripts/run-pipeline.sh
 docker compose exec backend sh /workspace/scripts/run-forecast.sh 7
+```
+
+发布完成后，可以分别检查 MySQL 快照行和 Flask API：
+
+```sh
+docker compose exec mysql sh -c \
+  'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" \
+  -e "SELECT id, published_at, JSON_LENGTH(payload) AS payload_fields FROM forecast_snapshot"'
+docker compose exec backend python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://localhost:5000/api/ml/forecast').read().decode())"
 ```
 
 脚本使用 `/hadoop-data/metastore` 下的现有 Hive catalog；预测完成后刷新 Web 页面即可。

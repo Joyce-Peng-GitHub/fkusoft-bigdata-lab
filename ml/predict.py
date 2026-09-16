@@ -104,8 +104,8 @@ def main():
             "forecast_date": d.strftime("%Y-%m-%d"),
             "weekday": d.strftime("%a"),
             "is_holiday": feat["is_holiday"],
-            "pred_kwh": round(pred_kwh, 2),
-            "pred_sessions": round(pred_ses, 2),
+            "pred_kwh": round(pred_kwh, 1),
+            "pred_sessions": round(pred_ses, 1),
         })
 
     print("-" * 60)

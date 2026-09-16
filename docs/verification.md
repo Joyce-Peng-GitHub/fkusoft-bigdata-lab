@@ -56,8 +56,10 @@ ODS / DWD / DWS / ADS 均通过 Spark Hive catalog 持久化；每次成功作�
   `mysql-connector-python`。
 - 本机（`node100`，非 Docker）执行 `PYTHONPATH=backend:ml python3 -m unittest discover -s tests -v`：
   共 6 项，其中 1 项依赖流水线产物的对账用例按设计跳过，其余全部通过。覆盖快照表 DDL、
-  提交负载、结构与 NaN 校验、提交失败上抛、接口 200/503 及敏感错误隐藏。
+  完整契约与 NaN 校验、提交失败上抛、同一 payload 从发布到 API 响应的贯通，以及接口
+  200/503 与敏感错误隐藏。数据库连接使用记录型测试替身，不等同于真实 MySQL 集成测试。
 - 未在本机重跑完整 Spark/Hive/Docker 链路；Dockerfile 与 Compose 未改动，仅发布与读取通道变化。
+  完整环境可按 `ml/README.md` 的命令查询 `forecast_snapshot` 并调用 API，核对真实发布链路。
 
 ### Forecast panel presentation update
 
