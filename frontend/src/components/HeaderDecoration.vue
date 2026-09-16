@@ -13,8 +13,9 @@
 }
 
 /* Keep the original decoration geometry responsive without scaling stroke widths.
-   Each line reveals from its own center once per mount. The retained final frame
-   stays fully open across data updates and viewport resizes. */
+   Each line reveals from its own center once per mount. App remounts this
+   decoration on page navigation and manual/automatic refresh. The final frame
+   stays fully open after completion and across metric changes or viewport resizes. */
 polyline {
   fill: none;
   stroke: #3f96a5;
