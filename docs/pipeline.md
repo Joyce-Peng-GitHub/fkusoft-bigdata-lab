@@ -22,9 +22,11 @@ Hive 使用 Spark 内置 Hive 支持，Derby metastore 持久化到 `/hadoop-dat
 - `GET /api/health`：已发布数据就绪返回 200；尚未发布或数据库故障返回 503。
 - `GET /api/dashboard`：指标、12 组分析、电池统计、数据质量和生成时间。
 - `GET /api/analysis/<dimension>`：单维或交叉分析；未知维度返回 404。
+- `GET /api/ml/forecast`：ML 预测的历史实际与未来若干天；尚未生成或数据库故障返回 503。
 
 Flask 只查询 MySQL，不在请求线程执行 Spark，也不回退到本地文件或模拟数据。
 MySQL `dashboard_snapshot` 保存 ADS 的完整 JSON 契约；单行事务更新保证请求读取同一批次。
+ML 预测以同样方式存入 `forecast_snapshot`（独立表、独立事务），由 `ml/predict.py` 发布。
 重复执行流水线覆盖 Hive 表和 MySQL 快照，不累加数据。失败时大屏仍可读取上次成功发布的数据，生成时间用于识别旧批次。
 
 大屏在展示边界统一格式化数值：电量、费用、时长及温度最多两位小数，订单量及采样量按整数展示。
