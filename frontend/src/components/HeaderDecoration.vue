@@ -17,7 +17,7 @@
    stays fully open across data updates and viewport resizes. */
 polyline {
   fill: none;
-  stroke: #3f96a5;
+  stroke: var(--color-decoration);
   vector-effect: non-scaling-stroke;
   animation: reveal-line 3s cubic-bezier(0.4, 1, 0.49, 0.98) forwards;
 }
