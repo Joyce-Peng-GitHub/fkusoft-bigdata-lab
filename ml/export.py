@@ -1,20 +1,15 @@
-"""Publish the web forecast snapshot through the shared MySQL store.
+"""通过共用的 MySQL 存储发布 Web 预测快照。
 
-The analytics dashboard and the ML forecast both expose a single-row JSON
-snapshot. Reusing the same MySQL database and connection settings keeps one
-publication pattern: a single-row InnoDB transaction replaces the payload
-atomically, so API readers never observe a half-written forecast and any
-failure before commit leaves the previously published snapshot readable.
-
-The backend database helper lives next to the Flask app, so this module adds
-that directory to ``sys.path`` before importing it. ``predict.py`` runs as a
-standalone script from ``ml/`` and has no other way to reach ``backend/db.py``.
+分析大屏与 ML 预测都对外暴露"单行 JSON 快照"。复用同一个 MySQL 库和
+同一套连接配置，保持统一的发布模式
 """
+
 import json
 import sys
 from pathlib import Path
 
-_BACKEND_DIR = Path(__file__).resolve().parents[1] / 'backend'
+# 将 backend 目录加入模块搜索路径，以便复用 backend/db.py 的连接管理
+_BACKEND_DIR = Path(__file__).resolve().parents[1] / "backend"
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
@@ -22,29 +17,40 @@ from db import database_connection
 
 
 def publish_forecast(payload):
-    """Validate the forecast contract and replace the served snapshot atomically.
+    """校验预测契约，并原子替换对外服务的快照。
 
     Args:
-        payload: Complete API payload with ``generated_at``, ``history`` and
-            ``forecast``. It is stored verbatim so the REST contract stays
-            reproducible from the database alone.
+        payload: 完整的 API payload，包含 ``generated_at``、``history``
+            和 ``forecast`` 字段。原样存储，保证 REST 契约可以仅凭
+            数据库内容完整复现。
 
     Raises:
-        ValueError: The payload is not a complete forecast or contains a
-            non-finite number that JSON cannot represent safely.
-        mysql.connector.Error: The publication transaction fails; the
-            previously published snapshot remains readable.
+        ValueError: payload 不是完整的预测快照，或含有 JSON 无法安全
+            表示的非有限数（NaN/Inf）。
+        mysql.connector.Error: 发布事务失败；此时上一次已发布的快照
+            保持可读，不受影响。
     """
-    if not isinstance(payload, dict) or not payload.get('history') or not payload.get('forecast'):
-        raise ValueError('Incomplete forecast snapshot')
+    # 契约校验：history 与 forecast 缺一不可，否则拒绝发布
+    if (
+        not isinstance(payload, dict)
+        or not payload.get("history")
+        or not payload.get("forecast")
+    ):
+        raise ValueError("Incomplete forecast snapshot")
+    # allow_nan=False：NaN/Inf 会写出非法 JSON，提前在此失败而不是污染快照
     encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
     with database_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute('''CREATE TABLE IF NOT EXISTS forecast_snapshot (
+            # 固定 id=1 的单行表：INSERT ... ON DUPLICATE KEY UPDATE
+            # 在单个事务内完成"替换"，读方要么读到旧快照、要么读到新快照
+            cursor.execute("""CREATE TABLE IF NOT EXISTS forecast_snapshot (
                 id TINYINT PRIMARY KEY, payload JSON NOT NULL,
                 published_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB''')
-            cursor.execute('''INSERT INTO forecast_snapshot (id,payload) VALUES (1,%s)
-                ON DUPLICATE KEY UPDATE payload=%s''', (encoded, encoded))
+                ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB""")
+            cursor.execute(
+                """INSERT INTO forecast_snapshot (id,payload) VALUES (1,%s)
+                ON DUPLICATE KEY UPDATE payload=%s""",
+                (encoded, encoded),
+            )
         connection.commit()
-    print(f'Published forecast with {len(payload["forecast"])} predicted days to MySQL')
+    print(f'已发布包含 {len(payload["forecast"])} 天预测的快照到 MySQL')
