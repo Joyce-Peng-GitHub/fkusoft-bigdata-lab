@@ -41,8 +41,8 @@ const option = computed<EChartsOption>(() => {
       `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${unit.value}` },
     legend: { top: 8, textStyle: { color: '#9cb8ce' } },
     grid: { left: 65, right: 24, top: 48, bottom: 30 },
-    xAxis: { type: 'category', data: [...history, ...future].map(row => row.date), axisLabel: { hideOverlap: true } },
-    yAxis: { type: 'value', name: unit.value, splitLine: { lineStyle: { color: '#163349' } } },
+    xAxis: { type: 'category', data: [...history, ...future].map(row => row.date), axisLabel: { hideOverlap: true, color: '#9cb8ce' } },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { color: '#9cb8ce' }, splitLine: { lineStyle: { color: '#163349' } } },
     // Anchor the dashed forecast at the last actual value to connect the two
     // periods. Earlier historical points remain absent from the forecast series.
     series: [
@@ -64,7 +64,7 @@ const option = computed<EChartsOption>(() => {
 </template>
 
 <style scoped>
-.forecast-panel{display:flex;flex-direction:column;min-height:0;padding:14px 12px 8px;background:#0c1c2d88;border:1px solid #20425e;border-radius:6px;min-width:0}
+.forecast-panel{display:flex;flex-direction:column;min-height:0;padding:14px 12px 8px;background:#0c1c2d88;border:1px solid #32776f;background-image:linear-gradient(135deg,#123d432e,transparent);border-radius:6px;min-width:0}
 p{font-size:12px;color:#9cb8ce;line-height:1.7}
 p[role=alert]{color:#ffbc88}
 </style>

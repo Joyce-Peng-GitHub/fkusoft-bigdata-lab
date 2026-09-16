@@ -50,17 +50,18 @@ const metricTooltip = (value: unknown) => `${metricNumber(value)} ${unit.value}`
 const axisNumber = (value: number) => number(value, 2);
 const rows = (key: string) => data.value?.dimensions[key] ?? [];
 const colors = ['#31e6c5', '#48a9ff', '#a195ff', '#ffc46c', '#ff789a'];
+// Axis labels use explicit light colors below for contrast in compact side panels.
 const base: EChartsOption = {
   color: colors, backgroundColor: 'transparent',
   textStyle: { color: '#9cb8ce', fontFamily: 'sans-serif' },
   tooltip: { trigger: 'axis', valueFormatter: metricTooltip },
-  grid: { left: 55, right: 22, top: 35, bottom: 46 },
+  grid: { left: 55, right: 32, top: 30, bottom: 32 },
 };
 function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): EChartsOption {
   const values = rows(key);
   return { ...base,
-    xAxis: { type: 'category', data: values.map(r => String(r[field])), axisLabel: { hideOverlap: true } },
-    yAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber }, splitLine: { lineStyle: { color: '#163349' } } },
+    xAxis: { type: 'category', data: values.map(r => String(r[field])), axisLabel: { color: '#9cb8ce', hideOverlap: true } },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { color: '#9cb8ce', formatter: axisNumber }, splitLine: { lineStyle: { color: '#163349' } } },
     series: [{ type, data: values.map(r => Number(r[metric.value])), smooth: true,
       ...(type === 'line' ? { areaStyle: { opacity: 0.13 } } : { barMaxWidth: 26 }) }],
   };
@@ -82,13 +83,13 @@ const energy = computed(() => category('energy', 'energy_band'));
 const location = computed(() => category('location', 'location'));
 const vehicle = computed(() => donut('vehicle', 'vehicle'));
 const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday'),
-  xAxis: { type: 'category', data: rows('weekday').map(r => ['一','二','三','四','五','六','日'][Number(r.weekday)-1]) },
+  xAxis: { type: 'category', axisLabel: { color: '#9cb8ce' }, data: rows('weekday').map(r => ['一','二','三','四','五','六','日'][Number(r.weekday)-1]) },
 }));
 const stations = computed<EChartsOption>(() => {
   const top = [...rows('station')].sort((a,b) => Number(b[metric.value])-Number(a[metric.value])).slice(0,10).reverse();
   return { ...base, grid: { left: 78, right: 35, top: 20, bottom: 48 },
     graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '编号 / 贡献', fill: '#9cb8ce', fontSize: 10 } }],
-    xAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber } }, yAxis: { type: 'category', data: top.map(r => String(r.station)) },
+    xAxis: { type: 'value', splitLine: { lineStyle: { color: '#163349' } }, name: unit.value, axisLabel: { color: '#9cb8ce', formatter: axisNumber } }, yAxis: { type: 'category', axisLabel: { color: '#9cb8ce', interval: 0, fontSize: 10 }, data: top.map(r => String(r.station)) },
     series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
       itemStyle: { borderRadius: [0, 5, 5, 0] } }],
   };
@@ -97,24 +98,24 @@ const comparison = computed<EChartsOption>(() => {
   const platforms = [...new Set(rows('platform_facility').map(r => String(r.platform)))];
   const facilities = [...new Set(rows('platform_facility').map(r => String(r.facility)))].sort();
   return { ...base, legend: { top: 0, textStyle: { color: '#9cb8ce' } },
-    xAxis: { type: 'category', data: facilities.map(f => `类型 ${f}`) },
-    yAxis: { type: 'value', name: unit.value, axisLabel: { formatter: axisNumber } },
+    xAxis: { type: 'category', axisLabel: { color: '#9cb8ce' }, data: facilities.map(f => `类型 ${f}`) },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { color: '#9cb8ce', formatter: axisNumber } },
     series: platforms.map(p => ({ name: p, type: 'bar', barMaxWidth: 20,
       data: facilities.map(f => Number(rows('platform_facility').find(r => r.platform === p && String(r.facility) === f)?.[metric.value] ?? 0)) })),
   };
 });
 const heatmap = computed<EChartsOption>(() => {
   const values = rows('weekday_hour');
-  return { ...base, grid: { left: 40, right: 15, top: 20, bottom: 60 },
+  return { ...base, grid: { left: 40, right: 15, top: 16, bottom: 66 },
     tooltip: { position: 'top', formatter: params => {
       const item = Array.isArray(params) ? params[0]! : params;
       const [hour, day, value] = item.value as number[];
       return `周${['一','二','三','四','五','六','日'][day!]} ${hour}时<br/>${metricTooltip(value)}`;
     } },
-    xAxis: { type: 'category', data: Array.from({length:24},(_,i) => `${i}时`), splitArea: { show: true } },
-    yAxis: { type: 'category', data: ['周一','周二','周三','周四','周五','周六','周日'] },
+    xAxis: { type: 'category', axisLabel: { color: '#9cb8ce' }, data: Array.from({length:24},(_,i) => `${i}时`), splitArea: { show: true } },
+    yAxis: { type: 'category', data: ['周一','周二','周三','周四','周五','周六','周日'], axisLabel: { color: '#9cb8ce', interval: 0, fontSize: 10 } },
     visualMap: { formatter: metricNumber, min: 0, max: Math.max(1,...values.map(r => Number(r[metric.value]))), calculable: true,
-      orient: 'horizontal', left: 'center', bottom: 0, textStyle: { color: '#9cb8ce' },
+      orient: 'horizontal', left: 'center', bottom: 0, itemHeight: 110, itemWidth: 10, textStyle: { color: '#9cb8ce' },
       inRange: { color: ['#10293d','#17638a','#31e6c5'] } },
     series: [{ type: 'heatmap', data: Array.from({length:168},(_,i) => {
       const hour = i%24, day = Math.floor(i/24)+1;
@@ -128,8 +129,8 @@ const battery = computed<EChartsOption>(() => ({ ...base,
     const [soc, temperature, samples] = item.value as number[];
     return `SOC 分段下界：${number(soc!)}%<br/>平均最高温度：${number(temperature!, 2)} ℃<br/>采样量：${number(samples!)} 条`;
   } },
-  xAxis: { type: 'value', name: 'SOC 分段下界 (%)', min: 0, max: 100 },
-  yAxis: { type: 'value', name: '平均最高温度 (℃)', axisLabel: { formatter: axisNumber } },
+  xAxis: { type: 'value', axisLabel: { color: '#9cb8ce' }, name: 'SOC 分段下界 (%)', min: 0, max: 100 },
+  yAxis: { type: 'value', name: '平均最高温度 (℃)', axisLabel: { color: '#9cb8ce', formatter: axisNumber } },
   series: [{ type: 'scatter', symbolSize: value => Math.max(10, Math.sqrt(Number(value[2]))*2),
     data: data.value?.battery.map(r => [r.soc_band, r.temperature, r.samples]) ?? [] }],
 }));
@@ -137,7 +138,7 @@ const panels = computed(() => [
   { title:'月度充电趋势', note:'2014.11 — 2015.10', option:trend.value },
   { title:'平台构成', option:platform.value },
   { title:'站点贡献 TOP 10', option:stations.value },
-  { title:'星期 × 小时分布', note:`交叉对比 01 · ${unit.value}`, option:heatmap.value, wide:true },
+  { title:'星期 × 小时分布', note:`交叉对比 01 · ${unit.value}`, option:heatmap.value },
   { title:'平台 × 设施类型', note:'交叉对比 02 · 分组柱状', option:comparison.value },
   { title:'小时充电分布', note:'按订单开始时间', option:hourly.value },
   { title:'每周充电节律', option:weekday.value },
@@ -182,12 +183,12 @@ const visiblePanels = computed(() => {
         <span>郑州充电能源分析 · {{ activeView === 'overview' ? '运行态势与预测' : '多维专题分析' }}</span>
       </nav>
     </template>
-      <section class="charts" :class="[activeView, { 'without-data': !data }]" aria-label="多维分析图表">
+    <section class="charts" :class="[activeView, { 'without-data': !data }]" aria-label="多维分析图表">
         <ForecastPanel v-show="activeView === 'overview' || !data" :metric="metric" :refresh-key="refreshKey" />
         <dv-border-box-12 v-for="panel in (data ? visiblePanels : [])" :key="panel.title" class="panel" :data-panel="panel.title" :color="['#20425e','#32cdb7']">
           <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" /></article>
         </dv-border-box-12>
-      </section>
+    </section>
     <template v-if="data">
       <footer>
         <strong>数据质量</strong> · 有效订单 {{ number(data.quality.accepted_sessions) }} / {{ number(data.quality.source_rows.sessions ?? 0) }} · 异常隔离 {{ data.quality.rejected_sessions }} · 去重 {{ data.quality.duplicates_removed }} · 电池记录 {{ number(data.quality.battery_accepted) }}
