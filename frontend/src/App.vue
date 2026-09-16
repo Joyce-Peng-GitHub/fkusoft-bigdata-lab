@@ -5,6 +5,7 @@ import type { EChartsOption } from 'echarts';
 import Chart from './components/Chart.vue';
 import HeaderDecoration from './components/HeaderDecoration.vue';
 import ForecastPanel from './components/ForecastPanel.vue';
+import { COLORS, FONT_STACK, HEATMAP_RAMP, PALETTE, areaGradient, barGradient, withAlpha } from './theme.js';
 
 type Row = Record<string, string | number>;
 interface Dashboard {
@@ -49,28 +50,36 @@ const metricNumber = (value: unknown) => number(Number(value), metric.value === 
 const metricTooltip = (value: unknown) => `${metricNumber(value)} ${unit.value}`;
 const axisNumber = (value: number) => number(value, 2);
 const rows = (key: string) => data.value?.dimensions[key] ?? [];
-const colors = ['#31e6c5', '#48a9ff', '#a195ff', '#ffc46c', '#ff789a'];
-// Axis labels use explicit light colors below for contrast in compact side panels.
+const tooltipStyle = {
+  backgroundColor: COLORS.panelSolid,
+  borderColor: COLORS.borderStrong,
+  textStyle: { color: COLORS.textPrimary },
+};
 const base: EChartsOption = {
-  color: colors, backgroundColor: 'transparent',
-  textStyle: { color: '#9cb8ce', fontFamily: 'sans-serif' },
-  tooltip: { trigger: 'axis', valueFormatter: metricTooltip },
+  color: [...PALETTE], backgroundColor: COLORS.transparent,
+  textStyle: { color: COLORS.textSecondary, fontFamily: FONT_STACK },
+  tooltip: { ...tooltipStyle, trigger: 'axis', valueFormatter: metricTooltip },
   grid: { left: 55, right: 32, top: 30, bottom: 32 },
 };
 function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): EChartsOption {
   const values = rows(key);
   return { ...base,
-    xAxis: { type: 'category', data: values.map(r => String(r[field])), axisLabel: { color: '#9cb8ce', hideOverlap: true } },
-    yAxis: { type: 'value', name: unit.value, axisLabel: { color: '#9cb8ce', formatter: axisNumber }, splitLine: { lineStyle: { color: '#163349' } } },
+    xAxis: { type: 'category', data: values.map(r => String(r[field])), axisLabel: { color: COLORS.textSecondary, hideOverlap: true },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } } },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { color: COLORS.textSecondary, formatter: axisNumber },
+      splitLine: { lineStyle: { color: COLORS.splitLine } } },
     series: [{ type, data: values.map(r => Number(r[metric.value])), smooth: true,
-      ...(type === 'line' ? { areaStyle: { opacity: 0.13 } } : { barMaxWidth: 26 }) }],
+      ...(type === 'line'
+        ? { areaStyle: { color: areaGradient(PALETTE[0]!) } }
+        : { barMaxWidth: 26, itemStyle: { color: barGradient(PALETTE[0]!), borderRadius: [4, 4, 0, 0] } }) }],
   };
 }
 function donut(key: string, field: string): EChartsOption {
-  return { ...base, tooltip: { trigger: 'item', valueFormatter: metricTooltip },
-    legend: { bottom: 0, textStyle: { color: '#9cb8ce' } },
+  return { ...base, tooltip: { ...tooltipStyle, trigger: 'item', valueFormatter: metricTooltip },
+    legend: { bottom: 0, textStyle: { color: COLORS.textSecondary } },
     series: [{ type: 'pie', radius: ['43%', '68%'], center: ['50%', '44%'],
-      label: { color: '#cce3ef', formatter: '{b}\n{d}%' },
+      itemStyle: { borderColor: COLORS.panelSolid, borderWidth: 2, borderRadius: 5 },
+      label: { color: COLORS.textPrimary, formatter: '{b}\n{d}%' },
       data: rows(key).map(r => ({ name: String(r[field]), value: Number(r[metric.value]) })) }],
   };
 }
@@ -83,55 +92,67 @@ const energy = computed(() => category('energy', 'energy_band'));
 const location = computed(() => category('location', 'location'));
 const vehicle = computed(() => donut('vehicle', 'vehicle'));
 const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday'),
-  xAxis: { type: 'category', axisLabel: { color: '#9cb8ce' }, data: rows('weekday').map(r => ['一','二','三','四','五','六','日'][Number(r.weekday)-1]) },
+  xAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary },
+    axisLine: { lineStyle: { color: COLORS.borderStrong } },
+    data: rows('weekday').map(r => ['一','二','三','四','五','六','日'][Number(r.weekday)-1]) },
 }));
 const stations = computed<EChartsOption>(() => {
   const top = [...rows('station')].sort((a,b) => Number(b[metric.value])-Number(a[metric.value])).slice(0,10).reverse();
   return { ...base, grid: { left: 78, right: 35, top: 20, bottom: 48 },
-    graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '编号 / 贡献', fill: '#9cb8ce', fontSize: 10 } }],
-    xAxis: { type: 'value', splitLine: { lineStyle: { color: '#163349' } }, name: unit.value, axisLabel: { color: '#9cb8ce', formatter: axisNumber } }, yAxis: { type: 'category', axisLabel: { color: '#9cb8ce', interval: 0, fontSize: 10 }, data: top.map(r => String(r.station)) },
+    graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '编号 / 贡献', fill: COLORS.textMuted, fontSize: 10 } }],
+    xAxis: { type: 'value', splitLine: { lineStyle: { color: COLORS.splitLine } }, name: unit.value,
+      axisLabel: { color: COLORS.textSecondary, formatter: axisNumber } },
+    yAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 10 },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: top.map(r => String(r.station)) },
     series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
-      itemStyle: { borderRadius: [0, 5, 5, 0] } }],
+      itemStyle: { borderRadius: [0, 5, 5, 0], color: barGradient(PALETTE[0]!, true) } }],
   };
 });
 const comparison = computed<EChartsOption>(() => {
   const platforms = [...new Set(rows('platform_facility').map(r => String(r.platform)))];
   const facilities = [...new Set(rows('platform_facility').map(r => String(r.facility)))].sort();
-  return { ...base, legend: { top: 0, textStyle: { color: '#9cb8ce' } },
-    xAxis: { type: 'category', axisLabel: { color: '#9cb8ce' }, data: facilities.map(f => `类型 ${f}`) },
-    yAxis: { type: 'value', name: unit.value, axisLabel: { color: '#9cb8ce', formatter: axisNumber } },
-    series: platforms.map(p => ({ name: p, type: 'bar', barMaxWidth: 20,
+  return { ...base, legend: { top: 0, textStyle: { color: COLORS.textSecondary } },
+    xAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: facilities.map(f => `类型 ${f}`) },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { color: COLORS.textSecondary, formatter: axisNumber },
+      splitLine: { lineStyle: { color: COLORS.splitLine } } },
+    series: platforms.map((p, index) => ({ name: p, type: 'bar', barMaxWidth: 20,
+      itemStyle: { color: barGradient(PALETTE[index % PALETTE.length]!), borderRadius: [4, 4, 0, 0] },
       data: facilities.map(f => Number(rows('platform_facility').find(r => r.platform === p && String(r.facility) === f)?.[metric.value] ?? 0)) })),
   };
 });
 const heatmap = computed<EChartsOption>(() => {
   const values = rows('weekday_hour');
   return { ...base, grid: { left: 40, right: 15, top: 16, bottom: 66 },
-    tooltip: { position: 'top', formatter: params => {
+    tooltip: { ...tooltipStyle, position: 'top', formatter: params => {
       const item = Array.isArray(params) ? params[0]! : params;
       const [hour, day, value] = item.value as number[];
       return `周${['一','二','三','四','五','六','日'][day!]} ${hour}时<br/>${metricTooltip(value)}`;
     } },
-    xAxis: { type: 'category', axisLabel: { color: '#9cb8ce' }, data: Array.from({length:24},(_,i) => `${i}时`), splitArea: { show: true } },
-    yAxis: { type: 'category', data: ['周一','周二','周三','周四','周五','周六','周日'], axisLabel: { color: '#9cb8ce', interval: 0, fontSize: 10 } },
+    xAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary }, data: Array.from({length:24},(_,i) => `${i}时`), splitArea: { show: true } },
+    yAxis: { type: 'category', data: ['周一','周二','周三','周四','周五','周六','周日'], axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 10 } },
     visualMap: { formatter: metricNumber, min: 0, max: Math.max(1,...values.map(r => Number(r[metric.value]))), calculable: true,
-      orient: 'horizontal', left: 'center', bottom: 0, itemHeight: 110, itemWidth: 10, textStyle: { color: '#9cb8ce' },
-      inRange: { color: ['#10293d','#17638a','#31e6c5'] } },
-    series: [{ type: 'heatmap', data: Array.from({length:168},(_,i) => {
+      orient: 'horizontal', left: 'center', bottom: 0, itemHeight: 110, itemWidth: 10, textStyle: { color: COLORS.textSecondary },
+      inRange: { color: [...HEATMAP_RAMP] } },
+    series: [{ type: 'heatmap', itemStyle: { borderColor: COLORS.page, borderWidth: 1 }, data: Array.from({length:168},(_,i) => {
       const hour = i%24, day = Math.floor(i/24)+1;
       return [hour,day-1,Number(values.find(r => Number(r.hour)===hour && Number(r.weekday)===day)?.[metric.value] ?? 0)];
     }) }],
   };
 });
 const battery = computed<EChartsOption>(() => ({ ...base,
-  tooltip: { trigger: 'item', formatter: params => {
+  tooltip: { ...tooltipStyle, trigger: 'item', formatter: params => {
     const item = Array.isArray(params) ? params[0]! : params;
     const [soc, temperature, samples] = item.value as number[];
     return `SOC 分段下界：${number(soc!)}%<br/>平均最高温度：${number(temperature!, 2)} ℃<br/>采样量：${number(samples!)} 条`;
   } },
-  xAxis: { type: 'value', axisLabel: { color: '#9cb8ce' }, name: 'SOC 分段下界 (%)', min: 0, max: 100 },
-  yAxis: { type: 'value', name: '平均最高温度 (℃)', axisLabel: { color: '#9cb8ce', formatter: axisNumber } },
+  xAxis: { type: 'value', axisLabel: { color: COLORS.textSecondary }, name: 'SOC 分段下界 (%)', min: 0, max: 100,
+    axisLine: { lineStyle: { color: COLORS.borderStrong } } },
+  yAxis: { type: 'value', name: '平均最高温度 (℃)', axisLabel: { color: COLORS.textSecondary, formatter: axisNumber },
+    splitLine: { lineStyle: { color: COLORS.splitLine } } },
   series: [{ type: 'scatter', symbolSize: value => Math.max(10, Math.sqrt(Number(value[2]))*2),
+    itemStyle: { color: withAlpha(PALETTE[2]!, 0.55), borderColor: PALETTE[2]!, borderWidth: 1,
+      shadowBlur: 10, shadowColor: withAlpha(PALETTE[2]!, 0.35) },
     data: data.value?.battery.map(r => [r.soc_band, r.temperature, r.samples]) ?? [] }],
 }));
 const panels = computed(() => [
@@ -185,7 +206,7 @@ const visiblePanels = computed(() => {
     </template>
     <section class="charts" :class="[activeView, { 'without-data': !data }]" aria-label="多维分析图表">
         <ForecastPanel v-show="activeView === 'overview' || !data" :metric="metric" :refresh-key="refreshKey" />
-        <dv-border-box-12 v-for="panel in (data ? visiblePanels : [])" :key="panel.title" class="panel" :data-panel="panel.title" :color="['#20425e','#32cdb7']">
+        <dv-border-box-12 v-for="panel in (data ? visiblePanels : [])" :key="panel.title" class="panel" :data-panel="panel.title" :color="[COLORS.borderStrong, COLORS.accent]">
           <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" /></article>
         </dv-border-box-12>
     </section>
@@ -198,36 +219,39 @@ const visiblePanels = computed(() => {
 </template>
 
 <style>
-:root { font-family: Inter, "Microsoft YaHei", sans-serif; color: #dfedf7; background: #07111e; font-synthesis: none; color-scheme: dark; }
+:root { font-family: var(--font-stack); color: var(--color-text-primary); background: var(--color-page); font-synthesis: none; color-scheme: dark; }
 * { box-sizing: border-box; }
-body { margin: 0; background: radial-gradient(ellipse at 50% 0, #14344b80, transparent 65%), #07111e; }
+body { margin: 0; background: radial-gradient(ellipse at 50% 0, var(--color-page-glow), var(--color-transparent) 65%), var(--color-page); }
 button, select { font: inherit; }
 /* Reserve height for charts and cap ultra-wide displays at 16:7. Small screens
    use document flow so text and charts remain readable without global scaling. */
 main { width: min(100%, calc(100dvh * 16 / 7)); height: 100dvh; min-height: 700px; margin: auto; padding: 18px 24px 12px; display: flex; flex-direction: column; gap: 10px; }
 header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .brand { display: flex; align-items: center; gap: 14px; }
-.brand-mark { display: grid; place-items: center; width: 40px; height: 44px; color: #39e1bd; font-size: 36px; border: 1px solid #2a6972; border-radius: 10px; background: #15343d; }
+.brand-mark { display: grid; place-items: center; width: 40px; height: 44px; color: var(--color-accent); font-size: 36px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-panel); box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
 h1 { font-size: clamp(20px, 1.6vw, 30px); letter-spacing: 4px; margin: 0; }
-.header-meta { font-size: 12px; text-align: right; line-height: 1.7; color: #a6c5d3; }
-.header-meta small { font-size: 9px; letter-spacing: 2px; color: #7395aa; }
-.live-dot { display: inline-block; width: 7px; height: 7px; background: #36dfb7; border-radius: 50%; box-shadow: 0 0 10px #36dfb7; margin-right: 5px; }
+.header-meta { font-size: 12px; text-align: right; line-height: 1.7; color: var(--color-text-secondary); }
+.header-meta small { font-size: 9px; letter-spacing: 2px; color: var(--color-text-faint); }
+.live-dot { display: inline-block; width: 7px; height: 7px; background: var(--color-accent); border-radius: 50%; box-shadow: 0 0 10px var(--color-accent-glow); margin-right: 5px; animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
 .header-decoration { height: 14px !important; flex: 0 0 14px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.toolbar p { margin: 0; font-size: 11px; color: #8cabbf; }
-.toolbar label { font-size: 12px; color: #87a8be; }
-select, button { background: #122b40; border: 1px solid #2b4b62; border-radius: 5px; padding: 6px 12px; color: #d2eaf5; font-size: 12px; }
+.toolbar p { margin: 0; font-size: 11px; color: var(--color-text-muted); }
+.toolbar label { font-size: 12px; color: var(--color-text-muted); }
+select, button { background: var(--color-control); border: 1px solid var(--color-border-strong); border-radius: 5px; padding: 6px 12px; color: var(--color-text-primary); font-size: 12px; accent-color: var(--color-accent); transition: border-color .15s ease, box-shadow .15s ease; }
 button { margin-left: 10px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--color-accent); box-shadow: 0 0 12px var(--color-accent-dim); }
+button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: .5; cursor: wait; }
 .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-.kpis article { min-width: 0; padding: 12px 16px; background: linear-gradient(115deg, #17374a90, #0c203580); border: 1px solid #244256; border-top: 2px solid #33c7b5; border-radius: 5px; }
-.kpis span { display: block; color: #a0bed0; font-size: 12px; }
-.kpis strong { display: block; font-size: clamp(20px, 1.7vw, 34px); color: #ddf9f3; margin: 5px 0 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.kpis small { color: #81a8bd; font-size: 10px; }
+.kpis article { min-width: 0; padding: 12px 16px; background: linear-gradient(115deg, var(--color-accent-dim), var(--color-panel)); border: 1px solid var(--color-border-panel); border-top: 2px solid var(--color-accent); border-radius: 5px; box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
+.kpis span { display: block; color: var(--color-text-muted); font-size: 12px; }
+.kpis strong { display: block; font-size: clamp(20px, 1.7vw, 34px); color: var(--color-text-primary); margin: 5px 0 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpis small { color: var(--color-text-faint); font-size: 10px; }
 .view-tabs { display: flex; gap: 8px; align-items: center; }
 .view-tabs button { margin: 0; }
-.view-tabs button[aria-pressed=true] { color: #63f0d4; border-color: #32cdb7; background: #143d46; }
-.view-tabs span { margin-left: auto; color: #81a8bd; font-size: 11px; }
+.view-tabs button[aria-pressed=true] { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-dim); }
+.view-tabs span { margin-left: auto; color: var(--color-text-faint); font-size: 11px; }
 .charts { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .charts.overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr) minmax(0, 1fr); grid-template-areas: "platform trend stations" "hourly forecast heatmap"; }
 .overview .forecast-panel { grid-area: forecast; }
@@ -236,17 +260,21 @@ button:disabled { opacity: .5; cursor: wait; }
 .overview [data-panel="站点贡献 TOP 10"] { grid-area: stations; }
 .overview [data-panel="小时充电分布"] { grid-area: hourly; }
 .overview [data-panel="星期 × 小时分布"] { grid-area: heatmap; }
-.panel { min-width: 0; min-height: 0; background: #0c1c2d88; }
+.panel { min-width: 0; min-height: 0; background: var(--color-panel); box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
 .panel article { height: 100%; min-height: 0; padding: 14px 12px 8px; display: flex; flex-direction: column; }
-h2 { flex-shrink: 0; font-size: 14px; letter-spacing: 1px; margin: 0; border-left: 3px solid #36d5bf; padding-left: 9px; }
-.panel-note { flex-shrink: 0; color: #89aabd; font-size: 10px; margin: 5px 0 0 12px; }
-footer { font-size: 11px; color: #83a2b6; border-top: 1px solid #1a3448; padding-top: 8px; line-height: 1.6; }
-footer strong { color: #39c4ad; }
-.message { margin: 0; padding: 10px; border: 1px solid #27475e; text-align: center; font-size: 12px; }
-.error { color: #ffbc88; border-color: #81553b; }
+h2 { flex-shrink: 0; font-size: 14px; letter-spacing: 1px; margin: 0; border-left: 3px solid var(--color-accent); padding-left: 9px; }
+.panel-note { flex-shrink: 0; color: var(--color-text-faint); font-size: 10px; margin: 5px 0 0 12px; }
+footer { font-size: 11px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border-panel); padding-top: 8px; line-height: 1.6; }
+footer strong { color: var(--color-accent); }
+.message { margin: 0; padding: 10px; border: 1px solid var(--color-border-strong); text-align: center; font-size: 12px; }
+.error { color: var(--color-error); border-color: var(--color-error-border); }
 .charts.without-data { grid-template-areas: none; grid-template-columns: 1fr; grid-template-rows: 1fr; }
 .without-data .forecast-panel { grid-area: auto; }
-select:focus-visible, button:focus-visible { outline: 2px solid #31e6c5; outline-offset: 3px; }
+select:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+  select, button { transition: none; }
+}
 @media (max-width: 1100px), (max-height: 699px) {
   main { width: 100%; height: auto; min-height: 100dvh; }
   .charts, .charts.overview { flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: 300px; grid-template-areas: none; }

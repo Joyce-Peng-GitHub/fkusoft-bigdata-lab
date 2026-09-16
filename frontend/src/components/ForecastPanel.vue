@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import axios from 'axios';
 import type { EChartsOption } from 'echarts';
 import Chart from './Chart.vue';
+import { COLORS, PALETTE, areaGradient } from '../theme.js';
 
 interface Point { date: string; energy: number; sessions: number }
 interface Forecast { generated_at: string; history_end: string; history: Point[]; forecast: Point[] }
@@ -35,18 +36,21 @@ const option = computed<EChartsOption>(() => {
   const history = data.value?.history ?? [];
   const future = data.value?.forecast ?? [];
   return {
-    color: ['#31e6c5', '#ffc46c'],
-    textStyle: { color: '#9cb8ce' },
+    color: [COLORS.accent, PALETTE[1]!],
+    textStyle: { color: COLORS.textSecondary },
     tooltip: { trigger: 'axis', valueFormatter: value => value == null ? '—' :
-      `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${unit.value}` },
-    legend: { top: 8, textStyle: { color: '#9cb8ce' } },
+      `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${unit.value}`,
+      backgroundColor: COLORS.panelSolid, borderColor: COLORS.borderStrong,
+      textStyle: { color: COLORS.textPrimary } },
+    legend: { top: 8, textStyle: { color: COLORS.textSecondary } },
     grid: { left: 65, right: 24, top: 48, bottom: 30 },
-    xAxis: { type: 'category', data: [...history, ...future].map(row => row.date), axisLabel: { hideOverlap: true, color: '#9cb8ce' } },
-    yAxis: { type: 'value', name: unit.value, axisLabel: { color: '#9cb8ce' }, splitLine: { lineStyle: { color: '#163349' } } },
+    xAxis: { type: 'category', data: [...history, ...future].map(row => row.date), axisLabel: { hideOverlap: true, color: COLORS.textSecondary } },
+    yAxis: { type: 'value', name: unit.value, axisLabel: { color: COLORS.textSecondary }, splitLine: { lineStyle: { color: COLORS.splitLine } } },
     // Anchor the dashed forecast at the last actual value to connect the two
     // periods. Earlier historical points remain absent from the forecast series.
     series: [
-      { name: '历史实际', type: 'line', data: [...history.map(row => row[props.metric]), ...future.map(() => null)] },
+      { name: '历史实际', type: 'line', data: [...history.map(row => row[props.metric]), ...future.map(() => null)],
+        areaStyle: { color: areaGradient(COLORS.accent, 0.22) } },
       { name: '模型预测', type: 'line', lineStyle: { type: 'dashed' },
         data: [...history.map((row, index) => index === history.length - 1 ? row[props.metric] : null), ...future.map(row => row[props.metric])] },
     ],
@@ -64,7 +68,7 @@ const option = computed<EChartsOption>(() => {
 </template>
 
 <style scoped>
-.forecast-panel{display:flex;flex-direction:column;min-height:0;padding:14px 12px 8px;background:#0c1c2d88;border:1px solid #32776f;background-image:linear-gradient(135deg,#123d432e,transparent);border-radius:6px;min-width:0}
-p{font-size:12px;color:#9cb8ce;line-height:1.7}
-p[role=alert]{color:#ffbc88}
+.forecast-panel{display:flex;flex-direction:column;min-height:0;padding:14px 12px 8px;background:var(--color-panel);border:1px solid var(--color-border-panel);background-image:linear-gradient(135deg,var(--color-accent-dim),var(--color-transparent));border-radius:6px;min-width:0;box-shadow:inset 0 1px 0 var(--color-panel-sheen)}
+p{font-size:12px;color:var(--color-text-secondary);line-height:1.7}
+p[role=alert]{color:var(--color-error)}
 </style>
