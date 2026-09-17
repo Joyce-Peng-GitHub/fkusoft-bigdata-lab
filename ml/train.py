@@ -44,7 +44,14 @@ LOG_TARGET = True
 
 
 def load_data():
-    """从 Hive 读取日粒度负荷序列（dws.daily_series，由 dwd.sessions 按天聚合）"""
+    """从 Hive 读取按日期升序排列的日粒度负荷序列。
+
+    ``dws.daily_series`` 由流水线从 ``dwd.sessions`` 按天聚合，是训练与
+    预测共同使用的数据契约。
+
+    Returns:
+        pandas.DataFrame: ``stat_date`` 已转换为时间类型的日粒度序列。
+    """
     spark = (
         SparkSession.builder.appName("ncs-ml-train")
         .enableHiveSupport()
@@ -60,6 +67,17 @@ def load_data():
 
 
 def build_features(pdf):
+    """构造不泄露当天真实值的训练特征和对数比例目标。
+
+    Args:
+        pdf: 至少包含 ``stat_date`` 和 ``total_kwh`` 的日粒度数据，输入
+            顺序不限。
+
+    Returns:
+        pandas.DataFrame: 按日期重排并附加时间、日历、14 日锚点和训练
+            目标的新特征表。最前面的 14 行因历史不足而具有空锚点，由
+            调用方决定如何处理。
+    """
     pdf = pdf.sort_values("stat_date").reset_index(drop=True)
     pdf["stat_date"] = pd.to_datetime(pdf["stat_date"])
     pdf["t"] = np.arange(len(pdf))
@@ -72,15 +90,37 @@ def build_features(pdf):
 
 
 def smape(y, p):
+    """计算对称平均绝对百分比误差。
+
+    Args:
+        y: 实际值数组。
+        p: 与实际值形状一致的预测值数组。
+
+    Returns:
+        float: 以百分比表示的 sMAPE；极小常数用于处理实际值和预测值
+            同时为零的样本。
+    """
     return float(np.mean(2 * np.abs(y - p) / (np.abs(y) + np.abs(p) + 1e-9)) * 100)
 
 
 def inverse(model, X, anchor_values):
+    """把模型输出的对数比例还原为负荷预测值。
+
+    Args:
+        model: 已训练且实现 ``predict`` 的回归模型。
+        X: 与模型特征契约一致的样本矩阵。
+        anchor_values: 每个样本在预测时可获得的 14 日均值锚点。
+
+    Returns:
+        numpy.ndarray: 锚点乘以预测比例后的负荷值。比例限制在 0 到 3，
+            避免指数还原后的异常值无限放大。
+    """
     ratio = np.clip(np.exp(model.predict(X)), 0.0, 3.0)
     return anchor_values * ratio
 
 
 def main():
+    """按时间评估模型，并用全部可用样本重训部署模型。"""
     print("=" * 62)
     print("  NCS 充电负荷预测 —— 训练（最终版：对数比例 + 锚点）")
     print("=" * 62)
