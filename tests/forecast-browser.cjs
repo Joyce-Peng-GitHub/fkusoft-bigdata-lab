@@ -49,7 +49,14 @@ const { chromium } = require('playwright');
     assert.deepEqual(option.series[1].data, [null, 10, 0, 12.3]);
     assert.equal(option.series[1].lineStyle.type, 'dashed');
     await page.getByLabel('分析指标').selectOption('sessions');
-    await page.getByText('交叉对比 01 · 单', { exact: true }).waitFor();
+    // Wait for the metric to reach the forecast chart itself; DOM text no longer changes.
+    await page.waitForFunction(async () => {
+      const element = document.querySelector('.forecast-panel .chart');
+      const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => /\/echarts\.js\?/.test(name));
+      if (!element || !url) return false;
+      const echarts = await import(url);
+      return echarts.getInstanceByDom(element)?.getOption()?.yAxis?.[0]?.name === '单';
+    });
     option = await chartOption();
     assert.equal(option.yAxis[0].name, '单');
     assert.deepEqual(option.series[1].data, [null, 2, 1.2, 2.4]);

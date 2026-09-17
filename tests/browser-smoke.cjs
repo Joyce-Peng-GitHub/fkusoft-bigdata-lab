@@ -21,7 +21,15 @@ const { chromium } = require('playwright-core');
     assert.equal(await page.locator('.charts .chart').evaluateAll(charts => charts.filter(chart => chart.querySelector('canvas')).length), 13);
     assert.match(await page.locator('.kpis').innerText(), /3,395/);
     await page.getByLabel('分析指标').selectOption('sessions');
-    await page.getByText('交叉对比 01 · 单', { exact: true }).waitFor();
+    // The note text was removed with the copy cleanup; verify the switch through
+    // the real chart instance instead of DOM text.
+    await page.waitForFunction(async () => {
+      const element = document.querySelector('.charts .chart');
+      const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => /\/echarts\.js\?/.test(name));
+      if (!element || !url) return false;
+      const echarts = await import(url);
+      return echarts.getInstanceByDom(element)?.getOption()?.yAxis?.[0]?.name === '单';
+    });
     await page.screenshot({ path: '/tmp/charging-dashboard-desktop.png', fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     // ResizeObserver updates charts on the next animation frame.
