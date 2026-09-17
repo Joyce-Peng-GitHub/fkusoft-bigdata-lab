@@ -195,7 +195,7 @@ const visiblePanels = computed(() => {
           ['充电订单',number(data.overview.sessions),'单'],
           ['累计充电量',number(data.overview.energy,2),'kWh'],
           ['覆盖站点',number(data.overview.stations),'座'],
-          ['累计费用',number(data.overview.fees,2),'源数据金额单位'],
+          ['累计费用',number(data.overview.fees,2),'元'],
           ['平均充电时长',number(data.overview.avg_duration,2),'小时'],
         ]" :key="item[0]"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong><small>{{ item[2] }}</small></article>
       </section>
