@@ -17,6 +17,19 @@ import chinese_calendar as cc
 
 
 def _as_date(d):
+    """将受支持的日期表示规范化为 ``datetime.date``。
+
+    Args:
+        d: ``datetime``、``date``、ISO 日期字符串，或提供 ``date()`` 方法
+            的日期对象（例如 ``pandas.Timestamp``）。
+
+    Returns:
+        datetime.date: 不含时间和时区信息的日历日期。
+
+    Raises:
+        TypeError: 输入不属于任何受支持的日期表示。
+        ValueError: ISO 日期字符串格式无效。
+    """
     if isinstance(d, datetime.datetime):
         return d.date()
     if isinstance(d, datetime.date):
@@ -29,7 +42,15 @@ def _as_date(d):
 
 
 def is_rest(d):
-    """是否休息日：法定节假日 + 普通周末，已考虑调休"""
+    """判断日期是否为实际休息日，包含法定假日和普通周末。
+
+    Args:
+        d: ``_as_date`` 支持的日期表示。
+
+    Returns:
+        int: 休息日返回 1，工作日返回 0。超出节假日库覆盖范围时，按
+        周一至周五工作、周末休息的规则回退。
+    """
     d = _as_date(d)
     try:
         return 0 if cc.is_workday(d) else 1
@@ -38,7 +59,14 @@ def is_rest(d):
 
 
 def is_holiday(d):
-    """是否法定节假日（有节日名的假期日）"""
+    """判断日期是否为有节日名称的法定假日。
+
+    Args:
+        d: ``_as_date`` 支持的日期表示。
+
+    Returns:
+        int: 法定假日返回 1，否则返回 0；超出节假日库覆盖范围时返回 0。
+    """
     d = _as_date(d)
     try:
         _, name = cc.get_holiday_detail(d)
@@ -48,7 +76,14 @@ def is_holiday(d):
 
 
 def is_makeup(d):
-    """是否调休上班日（周末却要上班）"""
+    """判断日期是否为周末安排的调休工作日。
+
+    Args:
+        d: ``_as_date`` 支持的日期表示。
+
+    Returns:
+        int: 调休工作日返回 1，否则返回 0；超出节假日库覆盖范围时返回 0。
+    """
     d = _as_date(d)
     try:
         return int(cc.is_workday(d) and d.weekday() >= 5)

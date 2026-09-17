@@ -43,7 +43,12 @@ N_FUTURE = int(sys.argv[1]) if len(sys.argv) > 1 else 7
 
 
 def load_history():
-    """读取历史日序列（dws.daily_series，由 dwd.sessions 按天聚合；最近的在最后）"""
+    """读取并规范化按日期升序排列的历史日序列。
+
+    Returns:
+        pandas.DataFrame: 来自 ``dws.daily_series`` 的日粒度数据，其中日期
+        已转换为时间类型，电量和会话数已强制转换为数值类型。
+    """
     spark = (
         SparkSession.builder.appName("ncs-ml-predict")
         .enableHiveSupport()
@@ -61,7 +66,14 @@ def load_history():
 
 
 def main():
-    """Predict daily load and publish CSV plus the atomic web JSON artifact."""
+    """递归预测每日负荷，并发布 CSV 与原子 Web JSON 快照。
+
+    每次迭代把新预测追加到历史序列，因此第二天起的 14 日锚点可能同时
+    包含实际值和先前预测值。这与模块文档描述的多步预测契约保持一致。
+
+    Raises:
+        ValueError: 请求的预测天数不在 1 到 366 天范围内。
+    """
     if not 1 <= N_FUTURE <= 366:
         raise ValueError("预测天数必须在 1 到 366 之间")
     bundle = joblib.load(MODEL_PATH)

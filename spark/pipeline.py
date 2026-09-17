@@ -1,7 +1,12 @@
-"""Load charging CSVs through HDFS and persistent Hive ODS/DWD/DWS/ADS tables.
+"""Build the charging-data warehouse and its dashboard snapshot.
 
-Run with spark-submit. Telemetry timestamps are intentionally not reconstructed:
-scientific notation in the supplied source has irreversibly lost precision.
+The job stages the supplied CSV files in HDFS, materializes persistent Hive
+ODS/DWD/DWS/ADS tables, and exports the ADS dashboard contract as JSON. Run it
+with ``spark-submit`` after HDFS and the Hive metastore are available.
+
+Telemetry timestamps are intentionally not reconstructed: scientific notation
+in the supplied source has irreversibly lost precision. Session timestamps use
+the documented source-specific 0014/0015 to 2014/2015 correction instead.
 """
 import json
 import os
@@ -11,7 +16,13 @@ from pathlib import Path
 
 from pyspark.sql import SparkSession, functions as F
 
+# Logical names become ODS table names; filenames are the immutable source
+# fixture names expected below RAW_DIR.
 SOURCES = {'sessions': 'nvv2t.csv', 'battery': 'dsv13r2.csv', 'stations': 'nvv2t_md_end.csv'}
+
+# Each entry defines both an aggregate table and a dashboard API dimension.
+# Multi-column entries preserve cross-dimensional relationships that cannot be
+# recovered by combining independent one-dimensional totals.
 DIMENSIONS = {
     'month': ['month'], 'hour': ['hour'], 'weekday': ['weekday'],
     'platform': ['platform'], 'facility': ['facility'], 'station': ['station'],
@@ -25,15 +36,26 @@ DIMENSIONS = {
 def main():
     """Materialize all warehouse layers and export a bounded dashboard snapshot.
 
+    ``RAW_DIR`` locates the source files on the submit host, ``HDFS_ROOT``
+    selects the warehouse namespace, and ``OUTPUT_PATH`` selects the local JSON
+    artifact consumed by the publication step. Defaults match the containerized
+    deployment.
+
     Raises:
         RuntimeError: Input keys conflict or reconciliation fails.
         subprocess.CalledProcessError: HDFS upload fails.
     """
     raw = Path(os.getenv('RAW_DIR', '/workspace/data/raw'))
     root = os.getenv('HDFS_ROOT', 'hdfs://backend:9000/charging')
+
+    # Uploading before Spark starts gives every executor one stable HDFS source
+    # rather than relying on container-local paths that workers may not share.
     subprocess.run(['hdfs', 'dfs', '-mkdir', '-p', root + '/raw'], check=True)
     for filename in SOURCES.values():
         subprocess.run(['hdfs', 'dfs', '-put', '-f', str(raw / filename), root + '/raw/'], check=True)
+
+    # UTC makes calendar dimensions reproducible across hosts. Four shuffle
+    # partitions are sufficient for this bounded teaching dataset.
     spark = (SparkSession.builder.appName('charging-warehouse')
              .config('spark.sql.warehouse.dir', root + '/warehouse')
              .config('spark.sql.session.timeZone', 'UTC')
@@ -42,13 +64,19 @@ def main():
     spark.sparkContext.setLogLevel('WARN')
     for layer in ['ods', 'dwd', 'dws', 'ads']:
         spark.sql(f'CREATE DATABASE IF NOT EXISTS {layer}')
+
+    # ODS preserves source strings for auditability. FAILFAST rejects structural
+    # CSV corruption, while value-level problems are classified in DWD below.
     counts = {}
     for name, filename in SOURCES.items():
         df = spark.read.option('header', True).option('mode', 'FAILFAST').csv(root + '/raw/' + filename)
+        # Some fixture exports include a UTF-8 BOM on the first header. Removing
+        # it here keeps downstream SQL independent of the producer's encoding.
         df = df.toDF(*[c.lstrip('\ufeff') for c in df.columns])
         counts[name] = df.count()
         df.write.mode('overwrite').saveAsTable('ods.' + name)
-    # Explicit try_cast keeps malformed numeric values auditable under ANSI SQL.
+    # Explicit try_cast keeps malformed numeric values auditable under ANSI SQL:
+    # conversion failures become NULL and are retained in rejected_sessions.
     spark.sql("""CREATE OR REPLACE TEMP VIEW typed AS SELECT *,
       try_cast(sessionId AS BIGINT) AS session_id,
       try_cast(kwhTotal AS DOUBLE) AS energy,
@@ -57,16 +85,27 @@ def main():
       try_to_timestamp(regexp_replace(created, '^00(14|15)-', '20$1-'), 'yyyy-MM-dd HH:mm:ss') AS started,
       try_to_timestamp(regexp_replace(ended, '^00(14|15)-', '20$1-'), 'yyyy-MM-dd HH:mm:ss') AS finished
       FROM ods.sessions""")
+    # Bounds reject impossible values and infinities without imposing business
+    # thresholds on otherwise plausible sessions. coalesce below is necessary
+    # because applying NOT to an unknown predicate still yields NULL, not TRUE.
     valid = "session_id IS NOT NULL AND energy >= 0 AND energy < 1e9 AND fees >= 0 AND fees < 1e9 AND duration > 0 AND duration < 1e6 AND started IS NOT NULL AND finished >= started AND stationId IS NOT NULL"
     spark.sql(f'SELECT * FROM typed WHERE NOT coalesce(({valid}), false)').write.mode('overwrite').saveAsTable('dwd.rejected_sessions')
+
+    # Exact duplicate source rows are harmless retries. Reusing a session ID for
+    # different data is ambiguous, so fail instead of choosing an arbitrary row.
     clean = spark.sql(f'SELECT * FROM typed WHERE {valid}').dropDuplicates()
     if clean.groupBy('session_id').count().filter('count > 1').count():
         raise RuntimeError('Conflicting session IDs; refusing arbitrary deduplication')
     clean.createOrReplaceTempView('clean')
+
+    # Station metadata must be one-to-one before the join; otherwise a single
+    # charging session would fan out and inflate every downstream aggregate.
     stations = spark.table('ods.stations').dropDuplicates()
     if stations.groupBy('stationId').count().filter('count > 1').count():
         raise RuntimeError('Conflicting station IDs')
     stations.write.mode('overwrite').saveAsTable('dwd.stations')
+    # Spark dayofweek uses Sunday=1. The pmod expression converts it to ISO-style
+    # Monday=1 through Sunday=7, matching the dashboard and integration tests.
     spark.sql("""SELECT c.session_id, c.energy, c.fees, c.duration, c.started,
       date_format(c.started, 'yyyy-MM') month, hour(c.started) hour,
       pmod(dayofweek(c.started)+5,7)+1 weekday,
@@ -80,6 +119,8 @@ def main():
            WHEN c.energy < 20 THEN '10–20kWh' ELSE '≥20kWh' END energy_band,
       coalesce(s.station_name, concat('站点 ',c.stationId)) station_name
       FROM clean c LEFT JOIN dwd.stations s ON c.stationId=s.stationId""").write.mode('overwrite').saveAsTable('dwd.sessions')
+    # Battery telemetry has no trustworthy event time, so it is validated as an
+    # independent sample population and never joined onto individual sessions.
     battery = spark.sql("""SELECT try_cast(esd AS BIGINT) session_id,
       try_cast(soc AS DOUBLE) soc,
       try_cast(`max_temperature (℃)` AS DOUBLE) temperature,
@@ -97,11 +138,15 @@ def main():
     total = df.count()
     dimensions = {}
     for name, keys in DIMENSIONS.items():
+        # DWS is the reusable aggregate layer. ADS copies the exact tables used
+        # to form the external snapshot so publication can be reproduced.
         agg = df.groupBy(*keys).agg(F.count('*').alias('sessions'), F.sum('energy').alias('energy'),
              F.sum('fees').alias('fees'), F.avg('duration').alias('avg_duration'),
              (F.sum('energy') / F.sum('duration')).alias('avg_power'))
         agg.write.mode('overwrite').saveAsTable('dws.' + name)
         spark.table('dws.' + name).write.mode('overwrite').saveAsTable('ads.' + name)
+        # Collection is intentionally limited to low-cardinality aggregate rows;
+        # raw sessions remain distributed in Hive and never enter driver memory.
         rows = [r.asDict() for r in spark.table('ads.' + name).orderBy(*keys).collect()]
         # Interval labels are presentation strings; lexical order is not numeric order.
         interval_orders = {
@@ -110,6 +155,8 @@ def main():
         }
         if name in interval_orders:
             rows.sort(key=lambda row: interval_orders[name].index(row[keys[0]]))
+        # Every session belongs to exactly one bucket in every dimension. This
+        # invariant catches accidental row loss or join fan-out before export.
         if sum(r['sessions'] for r in rows) != total:
             raise RuntimeError('Dimension reconciliation failed: ' + name)
         dimensions[name] = rows
@@ -119,6 +166,8 @@ def main():
     battery_rows = [r.asDict() for r in spark.table('dwd.battery').groupBy(
         (F.floor(F.col('soc')/10)*10).alias('soc_band')).agg(F.count('*').alias('samples'),
         F.avg('temperature').alias('temperature'), F.avg('voltage_spread').alias('voltage_spread')).orderBy('soc_band').collect()]
+    # Quality metadata travels with the metrics so consumers can distinguish
+    # rejected records, exact duplicates, and unavailable telemetry fields.
     payload = {'generated_at': datetime.now(timezone.utc).isoformat(), 'overview': overview,
         'dimensions': dimensions, 'battery': battery_rows,
         'quality': {'source_rows': counts, 'accepted_sessions': total,
