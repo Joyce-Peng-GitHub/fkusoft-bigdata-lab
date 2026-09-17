@@ -195,9 +195,9 @@ const visiblePanels = computed(() => {
           ['充电订单',number(data.overview.sessions),'单'],
           ['累计充电量',number(data.overview.energy,2),'kWh'],
           ['覆盖站点',number(data.overview.stations),'座'],
-          ['累计费用',number(data.overview.fees,2),'源数据金额单位'],
+          ['累计费用',number(data.overview.fees,2),''],
           ['平均充电时长',number(data.overview.avg_duration,2),'小时'],
-        ]" :key="item[0]"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong><small>{{ item[2] }}</small></article>
+        ]" :key="item[0]"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong><small v-if="item[2]">{{ item[2] }}</small></article>
       </section>
       <nav class="view-tabs" aria-label="分析专题">
         <button v-for="view in views" :key="view.id" :aria-pressed="activeView === view.id" @click="activeView = view.id">{{ view.label }}</button>
