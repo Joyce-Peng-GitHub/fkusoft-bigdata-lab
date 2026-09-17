@@ -3,6 +3,7 @@
 原始三份 CSV 从 `data/source/` 迁移到 `data/raw/`，内容保持不变。
 执行 `docker compose exec backend sh /workspace/scripts/run-pipeline.sh`：
 HDFS `/charging/raw` → Hive ODS 原始字符串 → DWD 类型转换、隔离异常、订单去重与站点关联 → DWS 聚合 → ADS 展示契约 → MySQL。
+各层由独立脚本实现，`run-pipeline.sh` 依次 `spark-submit`：`spark/ods.py` → `spark/dwd.py` → `spark/dws.py` → `spark/ads.py`，每层可单独重跑；`spark/pipeline.py` 为一次性编排入口。
 Hive 使用 Spark 内置 Hive 支持，Derby metastore 持久化到 `/hadoop-data/metastore`，表文件保存在 HDFS。
 不依赖独立 HiveServer2；可在同一 metastore 目录使用 spark-sql 查询。不要并发打开嵌入式 metastore。
 
