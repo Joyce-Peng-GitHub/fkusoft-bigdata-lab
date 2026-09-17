@@ -27,23 +27,49 @@ class WarehouseTest(unittest.TestCase):
         raw = Path(os.getenv('RAW_DIR', '/workspace/data/raw'))
         with (raw / 'nvv2t.csv').open(encoding='utf-8-sig') as source:
             cls.source = list(csv.DictReader(source))
+        valid_rows = []
+        for row in cls.source:
+            try:
+                int(row['sessionId'])
+                energy = Decimal(row['kwhTotal'])
+                fees = Decimal(row['charging_fees'])
+                duration = Decimal(row['chargeTimeHrs'])
+                started = datetime.strptime('20' + row['created'][2:], '%Y-%m-%d %H:%M:%S')
+                finished = datetime.strptime('20' + row['ended'][2:], '%Y-%m-%d %H:%M:%S')
+            except (ValueError, ArithmeticError):
+                continue
+            if (0 <= energy < Decimal('1e9') and 0 <= fees < Decimal('1e9')
+                    and 0 < duration < Decimal('1e6')
+                    and finished >= started):
+                valid_rows.append(row)
+        cls.rejected_count = len(cls.source) - len(valid_rows)
+        cls.accepted = list({tuple(row.items()): row for row in valid_rows}.values())
 
     def test_source_totals(self):
-        """All supplied orders and their additive measures survive every group."""
+        """Only valid, unique orders and their measures survive every group."""
         overview = self.payload['overview']
-        self.assertEqual(overview['sessions'], len(self.source))
+        self.assertEqual(overview['sessions'], len(self.accepted))
         for field, source_field in [('energy', 'kwhTotal'), ('fees', 'charging_fees')]:
-            expected = float(sum(Decimal(row[source_field]) for row in self.source))
+            expected = float(sum(Decimal(row[source_field]) for row in self.accepted))
             self.assertAlmostEqual(overview[field], expected, places=6)
             for rows in self.payload['dimensions'].values():
                 self.assertAlmostEqual(sum(row[field] for row in rows), expected, places=6)
-                self.assertEqual(sum(row['sessions'] for row in rows), len(self.source))
+                self.assertEqual(sum(row['sessions'] for row in rows), len(self.accepted))
+
+    def test_quality_counts(self):
+        """The pipeline reports rejected and duplicate source rows separately."""
+        quality = self.payload['quality']
+        duplicates = len(self.source) - self.rejected_count - len(self.accepted)
+        self.assertEqual(quality['source_rows']['sessions'], len(self.source))
+        self.assertEqual(quality['accepted_sessions'], len(self.accepted))
+        self.assertEqual(quality['rejected_sessions'], self.rejected_count)
+        self.assertEqual(quality['duplicates_removed'], duplicates)
 
     def test_cross_comparisons(self):
         """Recompute platform/facility and corrected weekday/hour from source."""
         expected_platform = defaultdict(int)
         expected_time = defaultdict(int)
-        for row in self.source:
+        for row in self.accepted:
             expected_platform[(row['platform'], row['facilityType'])] += 1
             started = datetime.strptime('20' + row['created'][2:], '%Y-%m-%d %H:%M:%S')
             expected_time[(started.isoweekday(), started.hour)] += 1

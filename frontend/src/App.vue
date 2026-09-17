@@ -211,7 +211,7 @@ const visiblePanels = computed(() => {
     </section>
     <template v-if="data">
       <footer>
-        <strong>数据质量</strong> · 有效订单 {{ number(data.quality.accepted_sessions) }} / {{ number(data.quality.source_rows.sessions ?? 0) }} · 异常隔离 {{ data.quality.rejected_sessions }} · 去重 {{ data.quality.duplicates_removed }} · 电池记录 {{ number(data.quality.battery_accepted) }}
+        有效订单 {{ number(data.quality.accepted_sessions) }} / {{ number(data.quality.source_rows.sessions ?? 0) }} · 电池记录 {{ number(data.quality.battery_accepted) }}
       </footer>
     </template>
   </main>
