@@ -19,12 +19,6 @@ const data = ref<Dashboard>();
 const loading = ref(false);
 const refreshKey = ref(0);
 const error = ref('');
-const activeView = ref('overview');
-const views = [
-  { id: 'overview', label: '运行总览', titles: ['平台构成', '月度充电趋势', '站点贡献 TOP 10', '小时充电分布', '星期 × 小时分布'] },
-  { id: 'structure', label: '充电结构', titles: ['平台 × 设施类型', '设施类型构成', '每周充电节律', '地点对比'] },
-  { id: 'behavior', label: '行为与电池', titles: ['充电时长分布', '单次电量分布', '管理车辆标识', '电池 SOC 与温度'] },
-];
 const metric = ref<'energy' | 'sessions'>('energy');
 const unit = computed(() => metric.value === 'energy' ? 'kWh' : '单');
 let timer: ReturnType<typeof setInterval>;
@@ -50,6 +44,13 @@ const metricNumber = (value: unknown) => number(Number(value), metric.value === 
 const metricTooltip = (value: unknown) => `${metricNumber(value)} ${unit.value}`;
 const axisNumber = (value: number) => number(value, 2);
 const rows = (key: string) => data.value?.dimensions[key] ?? [];
+// Platform and facility type are source codes. Translate them at the
+// presentation boundary only, so the API keeps the raw, auditable values.
+const platformLabel = (value: unknown) => ({ ios: 'iOS', android: '安卓', web: '网页' }[String(value)] ?? String(value));
+const facilityLabel = (value: unknown) => ({ '1': '交流', '2': '直流', '3': '交直流', '4': '超充' }[String(value)] ?? `类型 ${value}`);
+// managerVehicle splits users into two disjoint groups. The dataset has no
+// field dictionary, so these names are inferred from the English column name.
+const vehicleLabel = (value: unknown) => ({ '0': '非管理车辆', '1': '管理车辆' }[String(value)] ?? `类型 ${value}`);
 const tooltipStyle = {
   backgroundColor: COLORS.panelSolid,
   borderColor: COLORS.borderStrong,
@@ -74,23 +75,36 @@ function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): ECh
         : { barMaxWidth: 26, itemStyle: { color: barGradient(PALETTE[0]!), borderRadius: [4, 4, 0, 0] } }) }],
   };
 }
-function donut(key: string, field: string): EChartsOption {
+function donut(key: string, field: string, label: (value: unknown) => string = String): EChartsOption {
   return { ...base, tooltip: { ...tooltipStyle, trigger: 'item', valueFormatter: metricTooltip },
     legend: { bottom: 0, textStyle: { color: COLORS.textSecondary } },
     series: [{ type: 'pie', radius: ['43%', '68%'], center: ['50%', '44%'],
       itemStyle: { borderColor: COLORS.panelSolid, borderWidth: 2, borderRadius: 5 },
       label: { color: COLORS.textPrimary, formatter: '{b}\n{d}%' },
-      data: rows(key).map(r => ({ name: String(r[field]), value: Number(r[metric.value]) })) }],
+      data: rows(key).map(r => ({ name: label(r[field]), value: Number(r[metric.value]) })) }],
   };
 }
 const trend = computed(() => category('month', 'month', 'line'));
 const hourly = computed(() => category('hour', 'hour', 'line'));
-const platform = computed(() => donut('platform', 'platform'));
-const facility = computed(() => donut('facility', 'facility'));
+const platform = computed(() => donut('platform', 'platform', platformLabel));
+const facility = computed(() => donut('facility', 'facility', facilityLabel));
 const duration = computed(() => category('duration', 'duration_band'));
 const energy = computed(() => category('energy', 'energy_band'));
-const location = computed(() => category('location', 'location'));
-const vehicle = computed(() => donut('vehicle', 'vehicle'));
+// Locations have long Chinese names, so a horizontal bar keeps every label
+// readable. Only the top 10 are shown, matching the station ranking panel and
+// the standard panel height.
+const location = computed<EChartsOption>(() => {
+  const top = [...rows('location')].sort((a,b) => Number(b[metric.value]) - Number(a[metric.value])).slice(0, 10).reverse();
+  return { ...base, grid: { left: 108, right: 35, top: 20, bottom: 40 },
+    xAxis: { type: 'value', name: unit.value, splitLine: { lineStyle: { color: COLORS.splitLine } },
+      axisLabel: { color: COLORS.textSecondary, formatter: axisNumber } },
+    yAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 9 },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: top.map(r => String(r.location_name)) },
+    series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
+      itemStyle: { borderRadius: [0, 4, 4, 0], color: barGradient(PALETTE[2]!, true) } }],
+  };
+});
+const vehicle = computed(() => donut('vehicle', 'vehicle', vehicleLabel));
 const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday'),
   xAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary },
     axisLine: { lineStyle: { color: COLORS.borderStrong } },
@@ -98,12 +112,12 @@ const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday
 }));
 const stations = computed<EChartsOption>(() => {
   const top = [...rows('station')].sort((a,b) => Number(b[metric.value])-Number(a[metric.value])).slice(0,10).reverse();
-  return { ...base, grid: { left: 78, right: 35, top: 20, bottom: 48 },
-    graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '编号 / 贡献', fill: COLORS.textMuted, fontSize: 10 } }],
+  return { ...base, grid: { left: 150, right: 35, top: 20, bottom: 48 },
+    graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '站点 / 贡献', fill: COLORS.textMuted, fontSize: 10 } }],
     xAxis: { type: 'value', splitLine: { lineStyle: { color: COLORS.splitLine } }, name: unit.value,
       axisLabel: { color: COLORS.textSecondary, formatter: axisNumber } },
-    yAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 10 },
-      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: top.map(r => String(r.station)) },
+    yAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 9 },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: top.map(r => String(r.station_name)) },
     series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
       itemStyle: { borderRadius: [0, 5, 5, 0], color: barGradient(PALETTE[0]!, true) } }],
   };
@@ -113,10 +127,10 @@ const comparison = computed<EChartsOption>(() => {
   const facilities = [...new Set(rows('platform_facility').map(r => String(r.facility)))].sort();
   return { ...base, legend: { top: 0, textStyle: { color: COLORS.textSecondary } },
     xAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary },
-      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: facilities.map(f => `类型 ${f}`) },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: facilities.map(f => facilityLabel(f)) },
     yAxis: { type: 'value', name: unit.value, axisLabel: { color: COLORS.textSecondary, formatter: axisNumber },
       splitLine: { lineStyle: { color: COLORS.splitLine } } },
-    series: platforms.map((p, index) => ({ name: p, type: 'bar', barMaxWidth: 20,
+    series: platforms.map((p, index) => ({ name: platformLabel(p), type: 'bar', barMaxWidth: 20,
       itemStyle: { color: barGradient(PALETTE[index % PALETTE.length]!), borderRadius: [4, 4, 0, 0] },
       data: facilities.map(f => Number(rows('platform_facility').find(r => r.platform === p && String(r.facility) === f)?.[metric.value] ?? 0)) })),
   };
@@ -155,25 +169,23 @@ const battery = computed<EChartsOption>(() => ({ ...base,
       shadowBlur: 10, shadowColor: withAlpha(PALETTE[2]!, 0.35) },
     data: data.value?.battery.map(r => [r.soc_band, r.temperature, r.samples]) ?? [] }],
 }));
-const panels = computed(() => [
+interface Panel { title: string; note?: string; option: EChartsOption; wide?: boolean }
+// All analyses share one page: the heatmap spans two columns, the rest fill the grid.
+const panels = computed<Panel[]>(() => [
   { title:'月度充电趋势', option:trend.value },
   { title:'平台构成', option:platform.value },
   { title:'站点贡献 TOP 10', option:stations.value },
-  { title:'星期 × 小时分布', option:heatmap.value },
+  { title:'星期 × 小时分布', option:heatmap.value, wide:true },
   { title:'平台 × 设施类型', option:comparison.value },
   { title:'小时充电分布', note:'按订单开始时间', option:hourly.value },
   { title:'每周充电节律', option:weekday.value },
   { title:'设施类型构成', option:facility.value },
   { title:'充电时长分布', option:duration.value },
   { title:'单次电量分布', option:energy.value },
-  { title:'地点对比', note:'地点编号', option:location.value },
-  { title:'管理车辆标识', option:vehicle.value },
+  { title:'地点对比 TOP 10', note:'按站点地址简称', option:location.value },
+  { title:'车辆类型构成', option:vehicle.value },
   { title:'电池 SOC 与温度', note:'气泡大小标示样本数量', option:battery.value },
 ]);
-const visiblePanels = computed(() => {
-  const titles = views.find(view => view.id === activeView.value)!.titles;
-  return titles.map(title => panels.value.find(panel => panel.title === title)!);
-});
 </script>
 
 <template>
@@ -189,6 +201,7 @@ const visiblePanels = computed(() => {
     </section>
     <p v-if="error" class="message error" role="alert">{{ error }} {{ data ? '当前保留上次成功获取的数据。' : '' }}</p>
     <p v-if="!data && !error" class="message" role="status">正在读取分析结果…</p>
+    <ForecastPanel :metric="metric" :refresh-key="refreshKey" />
     <template v-if="data">
       <section class="kpis" aria-label="核心指标">
         <article v-for="item in [
@@ -199,13 +212,9 @@ const visiblePanels = computed(() => {
           ['平均充电时长',number(data.overview.avg_duration,2),'小时'],
         ]" :key="item[0]"><span>{{ item[0] }}</span><strong>{{ item[1] }}</strong><small>{{ item[2] }}</small></article>
       </section>
-      <nav class="view-tabs" aria-label="分析专题">
-        <button v-for="view in views" :key="view.id" :aria-pressed="activeView === view.id" @click="activeView = view.id">{{ view.label }}</button>
-      </nav>
     </template>
-    <section class="charts" :class="[activeView, { 'without-data': !data }]" aria-label="多维分析图表">
-        <ForecastPanel v-show="activeView === 'overview' || !data" :metric="metric" :refresh-key="refreshKey" />
-        <dv-border-box-12 v-for="panel in (data ? visiblePanels : [])" :key="panel.title" class="panel" :data-panel="panel.title" :color="[COLORS.borderStrong, COLORS.accent]">
+    <section class="charts" aria-label="多维分析图表">
+        <dv-border-box-12 v-for="panel in (data ? panels : [])" :key="panel.title" class="panel" :class="{ wide: panel.wide }" :data-panel="panel.title" :color="[COLORS.borderStrong, COLORS.accent]">
           <article><h2>{{ panel.title }}</h2><p v-if="panel.note" class="panel-note">{{ panel.note }}</p><Chart :option="panel.option" :label="panel.title" /></article>
         </dv-border-box-12>
     </section>
@@ -222,9 +231,9 @@ const visiblePanels = computed(() => {
 * { box-sizing: border-box; }
 body { margin: 0; background: radial-gradient(ellipse at 50% 0, var(--color-page-glow), var(--color-transparent) 65%), var(--color-page); }
 button, select { font: inherit; }
-/* Reserve height for charts and cap ultra-wide displays at 16:7. Small screens
-   use document flow so text and charts remain readable without global scaling. */
-main { width: min(100%, calc(100dvh * 16 / 7)); height: 100dvh; min-height: 700px; margin: auto; padding: 18px 24px 12px; display: flex; flex-direction: column; gap: 10px; }
+/* Every analysis lives on one page: the board scrolls naturally and keeps a
+   readable panel height instead of shrinking thirteen charts into one screen. */
+main { width: min(100%, 1920px); min-height: 100dvh; margin: auto; padding: 18px 24px 12px; display: flex; flex-direction: column; gap: 10px; }
 header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand-mark { display: block; width: 44px; height: 44px; flex: 0 0 44px; object-fit: contain; }
@@ -247,19 +256,11 @@ button:disabled { opacity: .5; cursor: wait; }
 .kpis span { display: block; color: var(--color-text-muted); font-size: 12px; }
 .kpis strong { display: block; font-size: clamp(20px, 1.7vw, 34px); color: var(--color-text-primary); margin: 5px 0 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kpis small { color: var(--color-text-faint); font-size: 10px; }
-.view-tabs { display: flex; gap: 8px; align-items: center; }
-.view-tabs button { margin: 0; }
-.view-tabs button[aria-pressed=true] { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-dim); }
-.view-tabs span { margin-left: auto; color: var(--color-text-faint); font-size: 11px; }
-.charts { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.charts.overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr) minmax(0, 1fr); grid-template-areas: "platform trend stations" "hourly forecast heatmap"; }
-.overview .forecast-panel { grid-area: forecast; }
-.overview [data-panel="平台构成"] { grid-area: platform; }
-.overview [data-panel="月度充电趋势"] { grid-area: trend; }
-.overview [data-panel="站点贡献 TOP 10"] { grid-area: stations; }
-.overview [data-panel="小时充电分布"] { grid-area: hourly; }
-.overview [data-panel="星期 × 小时分布"] { grid-area: heatmap; }
-.panel { min-width: 0; min-height: 0; background: var(--color-panel); box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
+.charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+/* The forecast board sits outside the grid, so it carries its own bounded height. */
+.forecast-panel { height: clamp(320px, 34vh, 440px); }
+.panel { min-width: 0; min-height: 340px; background: var(--color-panel); box-shadow: inset 0 1px 0 var(--color-panel-sheen); }
+.panel.wide { grid-column: span 2; }
 .panel article { height: 100%; min-height: 0; padding: 14px 12px 8px; display: flex; flex-direction: column; }
 h2 { flex-shrink: 0; font-size: 14px; letter-spacing: 1px; margin: 0; border-left: 3px solid var(--color-accent); padding-left: 9px; }
 .panel-note { flex-shrink: 0; color: var(--color-text-faint); font-size: 10px; margin: 5px 0 0 12px; }
@@ -267,27 +268,25 @@ footer { font-size: 11px; color: var(--color-text-secondary); border-top: 1px so
 footer strong { color: var(--color-accent); }
 .message { margin: 0; padding: 10px; border: 1px solid var(--color-border-strong); text-align: center; font-size: 12px; }
 .error { color: var(--color-error); border-color: var(--color-error-border); }
-.charts.without-data { grid-template-areas: none; grid-template-columns: 1fr; grid-template-rows: 1fr; }
-.without-data .forecast-panel { grid-area: auto; }
 select:focus-visible, button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   .live-dot { animation: none; }
   select, button { transition: none; }
 }
-@media (max-width: 1100px), (max-height: 699px) {
-  main { width: 100%; height: auto; min-height: 100dvh; }
-  .charts, .charts.overview { flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: 300px; grid-template-areas: none; }
-  .charts.overview > * { grid-area: auto; }
-  .charts.overview .forecast-panel { grid-column: 1 / -1; }
+@media (max-width: 1100px) {
+  main { width: 100%; }
+  .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel { min-height: 320px; }
   .kpis { gap: 8px; }
   .kpis article { padding: 10px; }
 }
 @media (max-width: 620px) {
   main { padding: 16px 12px; }
-  .header-meta, .view-tabs span { display: none; }
+  .header-meta { display: none; }
   h1 { font-size: 19px; letter-spacing: 1px; }
   .toolbar { align-items: flex-start; flex-direction: column; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .charts, .charts.overview { grid-template-columns: minmax(0, 1fr); }
+  .charts { grid-template-columns: minmax(0, 1fr); }
+  .panel.wide { grid-column: auto; }
 }
 </style>
