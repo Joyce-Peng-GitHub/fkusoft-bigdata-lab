@@ -66,7 +66,8 @@ def main():
            WHEN c.duration < 6 THEN '3–6h' ELSE '≥6h' END duration_band,
       CASE WHEN c.energy < 5 THEN '<5kWh' WHEN c.energy < 10 THEN '5–10kWh'
            WHEN c.energy < 20 THEN '10–20kWh' ELSE '≥20kWh' END energy_band,
-      coalesce(s.station_name, concat('站点 ',c.stationId)) station_name
+      coalesce(s.station_name, concat('站点 ',c.stationId)) station_name,
+      coalesce(regexp_replace(s.address, '^河南省郑州市', ''), concat('地点 ',c.locationId)) location_name
       FROM clean c LEFT JOIN dwd.stations s ON c.stationId=s.stationId""") \
         .write.mode('overwrite').saveAsTable('dwd.sessions')
     # Battery telemetry has no trustworthy event time, so it is validated as an

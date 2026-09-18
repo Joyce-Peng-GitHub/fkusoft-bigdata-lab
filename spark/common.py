@@ -30,11 +30,14 @@ SOURCES = {
 
 # Each entry defines both an aggregate table and a dashboard API dimension.
 # Multi-column entries preserve cross-dimensional relationships that cannot be
-# recovered by combining independent one-dimensional totals.
+# recovered by combining independent one-dimensional totals. The station and
+# location dimensions also carry their human-readable name column so the
+# dashboard can label rows without a second lookup.
 DIMENSIONS = {
     'month': ['month'], 'hour': ['hour'], 'weekday': ['weekday'],
-    'platform': ['platform'], 'facility': ['facility'], 'station': ['station'],
-    'location': ['location'], 'duration': ['duration_band'],
+    'platform': ['platform'], 'facility': ['facility'],
+    'station': ['station', 'station_name'], 'location': ['location', 'location_name'],
+    'duration': ['duration_band'],
     'energy': ['energy_band'], 'vehicle': ['vehicle'],
     'platform_facility': ['platform', 'facility'],
     'weekday_hour': ['weekday', 'hour'],

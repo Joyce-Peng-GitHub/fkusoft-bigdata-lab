@@ -44,6 +44,13 @@ const metricNumber = (value: unknown) => number(Number(value), metric.value === 
 const metricTooltip = (value: unknown) => `${metricNumber(value)} ${unit.value}`;
 const axisNumber = (value: number) => number(value, 2);
 const rows = (key: string) => data.value?.dimensions[key] ?? [];
+// Platform and facility type are source codes. Translate them at the
+// presentation boundary only, so the API keeps the raw, auditable values.
+const platformLabel = (value: unknown) => ({ ios: 'iOS', android: '安卓', web: '网页' }[String(value)] ?? String(value));
+const facilityLabel = (value: unknown) => ({ '1': '交流', '2': '直流', '3': '交直流', '4': '超充' }[String(value)] ?? `类型 ${value}`);
+// managerVehicle splits users into two disjoint groups. The dataset has no
+// field dictionary, so these names are inferred from the English column name.
+const vehicleLabel = (value: unknown) => ({ '0': '非管理车辆', '1': '管理车辆' }[String(value)] ?? `类型 ${value}`);
 const tooltipStyle = {
   backgroundColor: COLORS.panelSolid,
   borderColor: COLORS.borderStrong,
@@ -68,23 +75,36 @@ function category(key: string, field: string, type: 'bar' | 'line' = 'bar'): ECh
         : { barMaxWidth: 26, itemStyle: { color: barGradient(PALETTE[0]!), borderRadius: [4, 4, 0, 0] } }) }],
   };
 }
-function donut(key: string, field: string): EChartsOption {
+function donut(key: string, field: string, label: (value: unknown) => string = String): EChartsOption {
   return { ...base, tooltip: { ...tooltipStyle, trigger: 'item', valueFormatter: metricTooltip },
     legend: { bottom: 0, textStyle: { color: COLORS.textSecondary } },
     series: [{ type: 'pie', radius: ['43%', '68%'], center: ['50%', '44%'],
       itemStyle: { borderColor: COLORS.panelSolid, borderWidth: 2, borderRadius: 5 },
       label: { color: COLORS.textPrimary, formatter: '{b}\n{d}%' },
-      data: rows(key).map(r => ({ name: String(r[field]), value: Number(r[metric.value]) })) }],
+      data: rows(key).map(r => ({ name: label(r[field]), value: Number(r[metric.value]) })) }],
   };
 }
 const trend = computed(() => category('month', 'month', 'line'));
 const hourly = computed(() => category('hour', 'hour', 'line'));
-const platform = computed(() => donut('platform', 'platform'));
-const facility = computed(() => donut('facility', 'facility'));
+const platform = computed(() => donut('platform', 'platform', platformLabel));
+const facility = computed(() => donut('facility', 'facility', facilityLabel));
 const duration = computed(() => category('duration', 'duration_band'));
 const energy = computed(() => category('energy', 'energy_band'));
-const location = computed(() => category('location', 'location'));
-const vehicle = computed(() => donut('vehicle', 'vehicle'));
+// Locations have long Chinese names, so a horizontal bar keeps every label
+// readable. Only the top 10 are shown, matching the station ranking panel and
+// the standard panel height.
+const location = computed<EChartsOption>(() => {
+  const top = [...rows('location')].sort((a,b) => Number(b[metric.value]) - Number(a[metric.value])).slice(0, 10).reverse();
+  return { ...base, grid: { left: 108, right: 35, top: 20, bottom: 40 },
+    xAxis: { type: 'value', name: unit.value, splitLine: { lineStyle: { color: COLORS.splitLine } },
+      axisLabel: { color: COLORS.textSecondary, formatter: axisNumber } },
+    yAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 9 },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: top.map(r => String(r.location_name)) },
+    series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
+      itemStyle: { borderRadius: [0, 4, 4, 0], color: barGradient(PALETTE[2]!, true) } }],
+  };
+});
+const vehicle = computed(() => donut('vehicle', 'vehicle', vehicleLabel));
 const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday'),
   xAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary },
     axisLine: { lineStyle: { color: COLORS.borderStrong } },
@@ -92,12 +112,12 @@ const weekday = computed<EChartsOption>(() => ({ ...category('weekday', 'weekday
 }));
 const stations = computed<EChartsOption>(() => {
   const top = [...rows('station')].sort((a,b) => Number(b[metric.value])-Number(a[metric.value])).slice(0,10).reverse();
-  return { ...base, grid: { left: 78, right: 35, top: 20, bottom: 48 },
-    graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '编号 / 贡献', fill: COLORS.textMuted, fontSize: 10 } }],
+  return { ...base, grid: { left: 150, right: 35, top: 20, bottom: 48 },
+    graphic: [{ type: 'text', left: 0, bottom: 0, style: { text: '站点 / 贡献', fill: COLORS.textMuted, fontSize: 10 } }],
     xAxis: { type: 'value', splitLine: { lineStyle: { color: COLORS.splitLine } }, name: unit.value,
       axisLabel: { color: COLORS.textSecondary, formatter: axisNumber } },
-    yAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 10 },
-      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: top.map(r => String(r.station)) },
+    yAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary, interval: 0, fontSize: 9 },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: top.map(r => String(r.station_name)) },
     series: [{ type: 'bar', data: top.map(r => Number(r[metric.value])), barMaxWidth: 12,
       itemStyle: { borderRadius: [0, 5, 5, 0], color: barGradient(PALETTE[0]!, true) } }],
   };
@@ -107,10 +127,10 @@ const comparison = computed<EChartsOption>(() => {
   const facilities = [...new Set(rows('platform_facility').map(r => String(r.facility)))].sort();
   return { ...base, legend: { top: 0, textStyle: { color: COLORS.textSecondary } },
     xAxis: { type: 'category', axisLabel: { color: COLORS.textSecondary },
-      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: facilities.map(f => `类型 ${f}`) },
+      axisLine: { lineStyle: { color: COLORS.borderStrong } }, data: facilities.map(f => facilityLabel(f)) },
     yAxis: { type: 'value', name: unit.value, axisLabel: { color: COLORS.textSecondary, formatter: axisNumber },
       splitLine: { lineStyle: { color: COLORS.splitLine } } },
-    series: platforms.map((p, index) => ({ name: p, type: 'bar', barMaxWidth: 20,
+    series: platforms.map((p, index) => ({ name: platformLabel(p), type: 'bar', barMaxWidth: 20,
       itemStyle: { color: barGradient(PALETTE[index % PALETTE.length]!), borderRadius: [4, 4, 0, 0] },
       data: facilities.map(f => Number(rows('platform_facility').find(r => r.platform === p && String(r.facility) === f)?.[metric.value] ?? 0)) })),
   };
@@ -162,8 +182,8 @@ const panels = computed<Panel[]>(() => [
   { title:'设施类型构成', option:facility.value },
   { title:'充电时长分布', option:duration.value },
   { title:'单次电量分布', option:energy.value },
-  { title:'地点对比', note:'地点编号', option:location.value },
-  { title:'管理车辆标识', option:vehicle.value },
+  { title:'地点对比 TOP 10', note:'按站点地址简称', option:location.value },
+  { title:'车辆类型构成', option:vehicle.value },
   { title:'电池 SOC 与温度', note:'气泡大小标示样本数量', option:battery.value },
 ]);
 </script>
